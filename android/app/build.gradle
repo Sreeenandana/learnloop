@@ -1,11 +1,9 @@
+// App-level build.gradle
 plugins {
     id "com.android.application"
-    // START: FlutterFire Configuration
-    id 'com.google.gms.google-services'
-    // END: FlutterFire Configuration
+    id 'com.google.gms.google-services'  // Firebase plugin
     id "kotlin-android"
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
-    id "dev.flutter.flutter-gradle-plugin"
+    id "dev.flutter.flutter-gradle-plugin"  // Flutter Gradle plugin
 }
 
 def localProperties = new Properties()
@@ -28,7 +26,7 @@ if (flutterVersionName == null) {
 
 android {
     namespace = "com.example.learnloop"
-    compileSdk = flutter.compileSdkVersion
+    compileSdkVersion 34  // Set to your desired compile SDK version
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -37,25 +35,20 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.learnloop"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutterVersionCode.toInteger()
-        versionName = flutterVersionName
+        minSdkVersion 23  // Set to your desired min SDK version
+        targetSdkVersion 33  // This should match the target SDK from flutter block
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            signingConfig = signingConfigs.debug  // Adjust signing config as needed
         }
     }
 }
 
 flutter {
-    source = "../.."
+    source = "../.."  // Adjust path if needed
 }

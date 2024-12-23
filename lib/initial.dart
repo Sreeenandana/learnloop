@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'dart:convert';
+
+import 'package:learnloop/home.dart';
 
 class QuizApp extends StatelessWidget {
   const QuizApp({super.key});
@@ -12,24 +13,24 @@ class QuizApp extends StatelessWidget {
     return MaterialApp(
       title: 'Python Quiz',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: const LevelSelectionPage(),
+      debugShowCheckedModeBanner: false, // Remove debug banner
+      home: const NameInputPage(),
     );
   }
 }
 
-class LevelSelectionPage extends StatefulWidget {
-  const LevelSelectionPage({super.key});
+class NameInputPage extends StatefulWidget {
+  const NameInputPage({super.key});
 
   @override
-  LevelSelectionPageState createState() => LevelSelectionPageState();
+  State<NameInputPage> createState() => _NameInputPageState();
 }
 
-class LevelSelectionPageState extends State<LevelSelectionPage> {
+class _NameInputPageState extends State<NameInputPage> {
   final TextEditingController _nameController = TextEditingController();
 
-  void _startQuiz(BuildContext context, String level) {
+  void _proceedToLevelSelection() {
     if (_nameController.text.isEmpty) {
-      // Show an error if the name is not entered
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -50,6 +51,56 @@ class LevelSelectionPageState extends State<LevelSelectionPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
+        builder: (context) => LevelSelectionPage(userName: userName),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+          title: const Text('Enter Your Name',
+              style: TextStyle(color: Colors.white)),
+          backgroundColor: const Color.fromARGB(255, 14, 44, 69)),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'Enter your name:',
+              style: TextStyle(fontSize: 18),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                hintText: 'Your Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _proceedToLevelSelection,
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class LevelSelectionPage extends StatelessWidget {
+  final String userName;
+
+  const LevelSelectionPage({super.key, required this.userName});
+
+  void _startQuiz(BuildContext context, String level) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
         builder: (context) => QuizPage(level: level, userName: userName),
       ),
     );
@@ -59,32 +110,29 @@ class LevelSelectionPageState extends State<LevelSelectionPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Select Difficulty Level')),
-      body: Center(
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment:
+              MainAxisAlignment.center, // Center the buttons vertically
+          crossAxisAlignment:
+              CrossAxisAlignment.center, // Center the buttons horizontally
           children: [
             const Text(
-              'Enter your name:',
+              'Select a difficulty level:',
               style: TextStyle(fontSize: 18),
             ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  hintText: 'Your Name',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ),
+            const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () => _startQuiz(context, 'beginner'),
               child: const Text('Beginner'),
             ),
+            const SizedBox(height: 10),
             ElevatedButton(
               onPressed: () => _startQuiz(context, 'intermediate'),
               child: const Text('Intermediate'),
             ),
+            const SizedBox(height: 10),
             ElevatedButton(
               onPressed: () => _startQuiz(context, 'advanced'),
               child: const Text('Advanced'),
@@ -98,7 +146,7 @@ class LevelSelectionPageState extends State<LevelSelectionPage> {
 
 class QuizPage extends StatefulWidget {
   final String level;
-  final String userName; // Accept userName as a parameter
+  final String userName;
 
   const QuizPage({super.key, required this.level, required this.userName});
 
@@ -163,7 +211,6 @@ class _QuizPageState extends State<QuizPage> {
     final topic = question['topic'];
 
     if (selectedAnswer == correctAnswer) {
-      // Increment the score for the topic
       if (!_topicScores.containsKey(topic)) {
         _topicScores[topic] = 0;
       }
@@ -188,8 +235,7 @@ class _QuizPageState extends State<QuizPage> {
           score: _score,
           total: _questions.length,
           topicScores: _topicScores,
-          userId: "user123", // You can use a dynamic userId here
-          userName: widget.userName, // Pass userName to ResultPage
+          userId: widget.userName,
         ),
       ),
     );
@@ -221,9 +267,12 @@ class _QuizPageState extends State<QuizPage> {
               question['options'].length,
               (index) {
                 final option = question['options'][index];
-                return ElevatedButton(
-                  onPressed: () => _submitAnswer(option),
-                  child: Text(option),
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10.0),
+                  child: ElevatedButton(
+                    onPressed: () => _submitAnswer(option),
+                    child: Text(option),
+                  ),
                 );
               },
             ),
@@ -237,18 +286,15 @@ class _QuizPageState extends State<QuizPage> {
 class ResultPage extends StatelessWidget {
   final int score;
   final int total;
-  final Map<String, int> topicScores; // Pass topic-wise scores
-  final String userId; // Dynamic user ID
-  final String userName; // Dynamic user name
+  final Map<String, int> topicScores;
+  final String userId;
 
-  // Constructor to accept dynamic userId and userName
   const ResultPage({
     super.key,
     required this.score,
     required this.total,
     required this.topicScores,
-    required this.userId, // Accept userId dynamically
-    required this.userName, // Accept userName dynamically
+    required this.userId,
   });
 
   Future<void> _saveResultsToFirestore() async {
@@ -256,13 +302,11 @@ class ResultPage extends StatelessWidget {
 
     try {
       await firestore.collection('users').doc(userId).set({
-        'name': userName,
-        'marks': topicScores, // Store topic-wise scores
+        'marks': topicScores,
         'totalScore': score,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-
       print("Results saved successfully!");
     } catch (e) {
       print("Error saving results: $e");
@@ -270,54 +314,56 @@ class ResultPage extends StatelessWidget {
   }
 
   List<String> _getWeakTopics() {
-    List<String> weakTopics = [];
-    topicScores.forEach((topic, score) {
-      // You can set your own threshold for weak topics, here it's 3
-      if (score < 3) {
-        weakTopics.add(topic);
-      }
-    });
-    return weakTopics;
+    return topicScores.entries
+        .where((entry) => entry.value < 3)
+        .map((entry) => entry.key)
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Save results when the result page is loaded
     _saveResultsToFirestore();
 
     List<String> weakTopics = _getWeakTopics();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Quiz Results')),
-      body: Center(
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
               'Your Score: $score / $total',
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
             if (weakTopics.isNotEmpty)
               Text(
-                'Focus on these weak topics: ${weakTopics.join(', ')}',
+                'Focus on these weak topics:\n${weakTopics.join(', ')}',
                 style: const TextStyle(fontSize: 18, color: Colors.red),
+                textAlign: TextAlign.center,
               )
             else
               const Text(
                 'Great job! You are strong in all topics!',
                 style: TextStyle(fontSize: 18, color: Colors.green),
+                textAlign: TextAlign.center,
               ),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                Navigator.pushReplacement(
+                Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const LevelSelectionPage()),
+                    builder: (context) => const HomePage(),
+                  ),
+                  (route) => false,
                 );
               },
-              child: const Text('Retry Quiz'),
+              child: const Text('Back to Home'),
             ),
           ],
         ),

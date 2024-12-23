@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:learnloop/initial.dart';
-import '../home.dart';
+import 'home.dart'; // Ensure you have the HomePage widget implemented
+import 'initial.dart'; // Ensure you have the QuizApp widget implemented
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -25,25 +25,29 @@ class LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _login() async {
+    setState(() {
+      _errorMessage = '';
+    });
+
     try {
       final UserCredential userCredential =
           await _auth.signInWithEmailAndPassword(
-        email: _emailController.text,
-        password: _passwordController.text,
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
 
-      if (mounted && userCredential.user != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomePage()),
-        );
+      if (userCredential.user != null) {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomePage()),
+          );
+        }
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = _handleAuthError(e);
-        });
-      }
+      setState(() {
+        _errorMessage = _handleAuthError(e);
+      });
     }
   }
 
@@ -68,8 +72,8 @@ class LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Login'),
-      ),
+          title: const Text('Login', style: TextStyle(color: Colors.white)),
+          backgroundColor: const Color.fromARGB(255, 9, 28, 44)),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -79,6 +83,7 @@ class LoginPageState extends State<LoginPage> {
               controller: _emailController,
               decoration: const InputDecoration(
                 labelText: 'Email',
+                border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.emailAddress,
             ),
@@ -87,6 +92,7 @@ class LoginPageState extends State<LoginPage> {
               controller: _passwordController,
               decoration: const InputDecoration(
                 labelText: 'Password',
+                border: OutlineInputBorder(),
               ),
               obscureText: true,
             ),
@@ -140,24 +146,29 @@ class SignUpPageState extends State<SignUpPage> {
   }
 
   Future<void> _signUp() async {
+    setState(() {
+      _errorMessage = '';
+    });
+
     try {
       final UserCredential userCredential =
           await _auth.createUserWithEmailAndPassword(
-        email: _emailController.text,
-        password: _passwordController.text,
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
-      if (mounted && userCredential.user != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const QuizApp()),
-        );
+
+      if (userCredential.user != null) {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const QuizApp()),
+          );
+        }
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = _handleAuthError(e);
-        });
-      }
+      setState(() {
+        _errorMessage = _handleAuthError(e);
+      });
     }
   }
 
@@ -193,6 +204,7 @@ class SignUpPageState extends State<SignUpPage> {
               controller: _emailController,
               decoration: const InputDecoration(
                 labelText: 'Email',
+                border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.emailAddress,
             ),
@@ -201,6 +213,7 @@ class SignUpPageState extends State<SignUpPage> {
               controller: _passwordController,
               decoration: const InputDecoration(
                 labelText: 'Password',
+                border: OutlineInputBorder(),
               ),
               obscureText: true,
             ),
