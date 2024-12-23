@@ -1,6 +1,6 @@
 # learnloop
 
-A new Flutter project.
+An ongoing Flutter project- Intelligent Tutoring System.
 
 ## Getting Started
 
