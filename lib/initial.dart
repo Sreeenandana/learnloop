@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
-
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:learnloop/path.dart';
 import 'package:learnloop/home.dart';
 
 class QuizApp extends StatelessWidget {
@@ -14,94 +15,19 @@ class QuizApp extends StatelessWidget {
       title: 'Python Quiz',
       theme: ThemeData(primarySwatch: Colors.blue),
       debugShowCheckedModeBanner: false, // Remove debug banner
-      home: const NameInputPage(),
-    );
-  }
-}
-
-class NameInputPage extends StatefulWidget {
-  const NameInputPage({super.key});
-
-  @override
-  State<NameInputPage> createState() => _NameInputPageState();
-}
-
-class _NameInputPageState extends State<NameInputPage> {
-  final TextEditingController _nameController = TextEditingController();
-
-  void _proceedToLevelSelection() {
-    if (_nameController.text.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Error'),
-          content: const Text('Please enter your name.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    String userName = _nameController.text;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => LevelSelectionPage(userName: userName),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-          title: const Text('Enter Your Name',
-              style: TextStyle(color: Colors.white)),
-          backgroundColor: const Color.fromARGB(255, 14, 44, 69)),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Enter your name:',
-              style: TextStyle(fontSize: 18),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                hintText: 'Your Name',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _proceedToLevelSelection,
-              child: const Text('Continue'),
-            ),
-          ],
-        ),
-      ),
+      home: const LevelSelectionPage(),
     );
   }
 }
 
 class LevelSelectionPage extends StatelessWidget {
-  final String userName;
-
-  const LevelSelectionPage({super.key, required this.userName});
+  const LevelSelectionPage({super.key});
 
   void _startQuiz(BuildContext context, String level) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => QuizPage(level: level, userName: userName),
+        builder: (context) => QuizPage(level: level),
       ),
     );
   }
@@ -146,9 +72,8 @@ class LevelSelectionPage extends StatelessWidget {
 
 class QuizPage extends StatefulWidget {
   final String level;
-  final String userName;
 
-  const QuizPage({super.key, required this.level, required this.userName});
+  const QuizPage({super.key, required this.level});
 
   @override
   State<QuizPage> createState() => _QuizPageState();
@@ -210,14 +135,34 @@ class _QuizPageState extends State<QuizPage> {
     final correctAnswer = question['correct_answer'];
     final topic = question['topic'];
 
-    if (selectedAnswer == correctAnswer) {
-      if (!_topicScores.containsKey(topic)) {
-        _topicScores[topic] = 0;
-      }
-      _topicScores[topic] = _topicScores[topic]! + 1;
-      _score++;
+    // Check if correctAnswer or topic is null
+    if (correctAnswer == null) {
+      _showError('Error: Missing data for correct_answer.');
+      return;
+    }
+    if (topic == null) {
+      _showError('Error: Missing data for topic.');
+      return;
     }
 
+    if (!_topicScores.containsKey(topic)) {
+      _topicScores[topic] = 0; // Initialize score for this topic
+      //_showError("initialised for $topic");
+    }
+
+    // Check if the answer is correct
+    if (selectedAnswer == correctAnswer) {
+      // Check if topic is missing and initialize
+
+      // Increment score for this topic
+      _topicScores[topic] = _topicScores[topic]! + 1;
+      // _showError("score is $_topicScores[topic] for $topic");
+      //print("score is $_topicScores[topic] for $topic");
+
+      // Increment total score
+      _score++;
+    }
+    // Move to the next question or show results if last question
     if (_currentQuestionIndex < _questions.length - 1) {
       setState(() {
         _currentQuestionIndex++;
@@ -228,6 +173,9 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   void _showResults() {
+    // Get userId from FirebaseAuth
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown_user';
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -235,7 +183,7 @@ class _QuizPageState extends State<QuizPage> {
           score: _score,
           total: _questions.length,
           topicScores: _topicScores,
-          userId: widget.userName,
+          userId: userId, // Pass userId to ResultPage
         ),
       ),
     );
@@ -301,9 +249,10 @@ class ResultPage extends StatelessWidget {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
     try {
+      // Store topic scores and total score using userId as the document ID
       await firestore.collection('users').doc(userId).set({
-        'marks': topicScores,
-        'totalScore': score,
+        'marks': topicScores, // Save the topic scores as a map
+        'totalScore': score, // Save the total score
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -313,18 +262,10 @@ class ResultPage extends StatelessWidget {
     }
   }
 
-  List<String> _getWeakTopics() {
-    return topicScores.entries
-        .where((entry) => entry.value < 3)
-        .map((entry) => entry.key)
-        .toList();
-  }
-
   @override
   Widget build(BuildContext context) {
+    // Save results to Firestore
     _saveResultsToFirestore();
-
-    List<String> weakTopics = _getWeakTopics();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Quiz Results')),
@@ -340,18 +281,18 @@ class ResultPage extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-            if (weakTopics.isNotEmpty)
-              Text(
-                'Focus on these weak topics:\n${weakTopics.join(', ')}',
-                style: const TextStyle(fontSize: 18, color: Colors.red),
-                textAlign: TextAlign.center,
-              )
-            else
-              const Text(
-                'Great job! You are strong in all topics!',
-                style: TextStyle(fontSize: 18, color: Colors.green),
-                textAlign: TextAlign.center,
-              ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        LearningPathPage(topicScores: topicScores),
+                  ),
+                );
+              },
+              child: const Text('View Learning Path'),
+            ),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
