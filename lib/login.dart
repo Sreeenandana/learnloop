@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'home.dart'; // Ensure you have the HomePage widget implemented
-import 'initial.dart'; // Ensure you have the QuizApp widget implemented
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore package
+import 'home.dart';
+import 'initial.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -110,9 +111,15 @@ class LoginPageState extends State<LoginPage> {
             const SizedBox(height: 16),
             TextButton(
               onPressed: () {
+                // Passing the email and password to the SignUpPage
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const SignUpPage()),
+                  MaterialPageRoute(
+                    builder: (context) => SignUpPage(
+                      email: _emailController.text.trim(),
+                      password: _passwordController.text.trim(),
+                    ),
+                  ),
                 );
               },
               child: const Text('New user? Sign Up'),
@@ -125,23 +132,27 @@ class LoginPageState extends State<LoginPage> {
 }
 
 class SignUpPage extends StatefulWidget {
-  const SignUpPage({super.key});
+  final String email;
+  final String password;
+
+  const SignUpPage({super.key, required this.email, required this.password});
 
   @override
   SignUpPageState createState() => SignUpPageState();
 }
 
 class SignUpPageState extends State<SignUpPage> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   String _errorMessage = '';
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _nameController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -150,15 +161,35 @@ class SignUpPageState extends State<SignUpPage> {
       _errorMessage = '';
     });
 
+    // Check if the password and confirm password match
+    if (_confirmPasswordController.text.trim() != widget.password) {
+      setState(() {
+        _errorMessage = 'Passwords do not match.';
+      });
+      return;
+    }
+
     try {
       final UserCredential userCredential =
           await _auth.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+        email: widget.email,
+        password: widget.password,
       );
 
       if (userCredential.user != null) {
+        // Store user name, email, and other details in Firestore
+        final user = userCredential.user;
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user!.uid)
+            .set({
+          'name': _nameController.text.trim(),
+          'email': widget.email,
+          'createdAt': Timestamp.now(), // Store the account creation time
+        });
+
         if (mounted) {
+          // Navigate to HomePage after successful sign-up
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const QuizApp()),
@@ -200,19 +231,41 @@ class SignUpPageState extends State<SignUpPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
+            // Name field
             TextField(
-              controller: _emailController,
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Display email pre-filled from LoginPage
+            TextField(
+              controller: TextEditingController(text: widget.email),
               decoration: const InputDecoration(
                 labelText: 'Email',
                 border: OutlineInputBorder(),
               ),
-              keyboardType: TextInputType.emailAddress,
+              // enabled: false, // Make email field read-only
             ),
             const SizedBox(height: 16),
+            // Display password pre-filled from LoginPage
             TextField(
-              controller: _passwordController,
+              controller: TextEditingController(text: widget.password),
               decoration: const InputDecoration(
                 labelText: 'Password',
+                border: OutlineInputBorder(),
+              ),
+              obscureText: true,
+              //enabled: false, // Make password field read-only
+            ),
+            const SizedBox(height: 16),
+            // Confirm Password field
+            TextField(
+              controller: _confirmPasswordController,
+              decoration: const InputDecoration(
+                labelText: 'Confirm Password',
                 border: OutlineInputBorder(),
               ),
               obscureText: true,

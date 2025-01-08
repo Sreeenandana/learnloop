@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class LearningPathPage extends StatefulWidget {
-  final Map<String, int>? topicScores; // Accept topicScores as a parameter
+  final Map<String, int>? topicScores;
 
   const LearningPathPage({super.key, this.topicScores});
 
@@ -15,6 +15,7 @@ class LearningPathPage extends StatefulWidget {
 
 class _LearningPathPageState extends State<LearningPathPage> {
   bool _isLoading = true;
+  String _errorMessage = '';
   List<Map<String, dynamic>> _priorities = [];
   final Map<String, List<String>> _subtopics = {};
 
@@ -29,31 +30,36 @@ class _LearningPathPageState extends State<LearningPathPage> {
     final userId = FirebaseAuth.instance.currentUser?.uid;
 
     if (userId == null) {
-      // Handle the case where no user is logged in
-      print('No user is logged in.');
+      setState(() {
+        _errorMessage = 'No user is logged in.';
+        _isLoading = false;
+      });
       return;
     }
 
-    // Check if topicScores are passed
     Map<String, int> topicScores = widget.topicScores ?? {};
 
     if (topicScores.isEmpty) {
-      // If topicScores are not passed, fetch from Firestore
       try {
         final userDoc = await firestore.collection('users').doc(userId).get();
-        topicScores = userDoc.data()?['marks'] ?? {};
+        topicScores = Map<String, int>.from(userDoc.data()?['marks'] ?? {});
       } catch (e) {
-        print('Error fetching topic scores from Firestore: $e');
+        setState(() {
+          _errorMessage = 'Error fetching topic scores: $e';
+          _isLoading = false;
+        });
         return;
       }
     }
 
     if (topicScores.isEmpty) {
-      print('No topic scores found.');
+      setState(() {
+        _errorMessage = 'No topic scores found.';
+        _isLoading = false;
+      });
       return;
     }
 
-    // Proceed with generating the learning path
     await _generateLearningPath(userId, topicScores);
   }
 
@@ -64,10 +70,9 @@ class _LearningPathPageState extends State<LearningPathPage> {
           ? topicScores.values.reduce((a, b) => a > b ? a : b)
           : 1;
 
-      // Calculate priorities and retain the original order
       List<Map<String, dynamic>> priorities = topicScores.entries.map((entry) {
         final normalizedScore = entry.value / maxScore;
-        final priority = 1 - normalizedScore; // Lower score = higher priority
+        final priority = 1 - normalizedScore;
         return {
           'topic': entry.key,
           'priority': priority,
@@ -75,10 +80,8 @@ class _LearningPathPageState extends State<LearningPathPage> {
         };
       }).toList();
 
-      // Fetch subtopics for each topic
       await _fetchSubtopics(priorities);
 
-      // Store the learning path in Firestore for future use
       await FirebaseFirestore.instance
           .collection('learning_paths')
           .doc(userId)
@@ -88,35 +91,40 @@ class _LearningPathPageState extends State<LearningPathPage> {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      setState(() {
-        _priorities = priorities;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _priorities = priorities;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      print('Error generating learning path: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Error generating learning path: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _fetchSubtopics(List<Map<String, dynamic>> priorities) async {
-    for (var priority in priorities) {
-      final topic = priority['topic'];
-      final topicPriority = priority['priority'];
+    try {
+      for (var priority in priorities) {
+        final topic = priority['topic'];
+        final topicPriority = priority['priority'];
 
-      try {
         final response = await http.get(Uri.parse(
             'http://127.0.0.1:5000/subtopics?topic=$topic&priority=$topicPriority'));
 
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
-          setState(() {
-            _subtopics[topic] = List<String>.from(data['subtopics']);
-          });
+          _subtopics[topic] = List<String>.from(data['subtopics']);
         } else {
           print('Failed to load subtopics for $topic: ${response.body}');
         }
-      } catch (e) {
-        print('Error fetching subtopics for $topic: $e');
       }
+    } catch (e) {
+      print('Error fetching subtopics: $e');
     }
   }
 
@@ -126,6 +134,19 @@ class _LearningPathPageState extends State<LearningPathPage> {
       return Scaffold(
         appBar: AppBar(title: const Text('Learning Path')),
         body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_errorMessage.isNotEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Learning Path')),
+        body: Center(
+          child: Text(
+            _errorMessage,
+            style: const TextStyle(color: Colors.red, fontSize: 16),
+            textAlign: TextAlign.center,
+          ),
+        ),
       );
     }
 
