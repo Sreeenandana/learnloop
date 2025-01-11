@@ -19,15 +19,15 @@ def generate_content():
 
     # Construct prompt based on selected difficulty
     if level == 'beginner':
-        prompt = ("Generate 20 beginner-level Python multiple choice questions (MCQs) about variables, loops, and basic syntax. "
+        prompt = ("Generate 20 beginner-level Java multiple choice questions (MCQs) about variables, loops, and basic syntax. "
                   "For each question, provide 4 options. Start the question with 'qstn:', options with 'opt:' with each option separated by comma, and the correct answer with 'ans:' and topic with 'top:'. "
                   "Do not provide any other message or use any special characters or formatting unless necessary in questions. Separate each question set with a newline. Put a question and its options and answer in a single line with only space separating.")
     elif level == 'intermediate':
-        prompt = ("Generate 20 intermediate-level Python multiple choice questions (MCQs) about functions, classes, and data structures. "
+        prompt = ("Generate 20 intermediate-level Java multiple choice questions (MCQs) about functions, classes, and data structures. "
                   "For each question, provide 4 options. Start the question with 'qstn:', options with 'opt:' with each option separated by comma, and the correct answer with 'ans:'and topic with 'top:'. "
                   "Do not provide any other message or use any special characters or formatting unless necessary in questions. Separate each question set with a newline. Put a question and its options and answer in a single line with only space separating.")
     elif level == 'advanced':
-        prompt = ("Generate 20 advanced-level Python multiple choice questions (MCQs) about algorithms, data science, and optimization. "
+        prompt = ("Generate 20 advanced-level Java multiple choice questions (MCQs) about algorithms, data science, and optimization. "
                   "For each question, provide 4 options. Start the question with 'qstn:', options with 'opt:' with each option separated by comma, and the correct answer with 'ans:'and topic with 'top:'. "
                   "Do not provide any other message or use any special characters or formatting unless necessary in questions. Separate each question set with a newline. Put a question and its options and answer in a single line with only space separating.")
     else:
@@ -82,7 +82,7 @@ def generate_subtopics():
 
     try:
         # Construct prompt to generate subtopics
-        prompt = (f"Generate subtopics for the topic '{topic}'. "
+        prompt = (f"Generate subtopics for the topic '{topic}' in context of Java."
                   f"The priority is {priority} out of 1. More priority means less knowledge and has to be taught from bare basics as if user is total beginner."
                   "Less priority means user is knowledgable enough and can be taught accordingly. Provide 3 to 6 subtopics that are essential to understanding this topic based on its priority. " 
                   "List the subtopics as a plain text, each separated by a newline.")
@@ -101,6 +101,30 @@ def generate_subtopics():
 
     except Exception as e:
         return jsonify({'error': f'Failed to generate subtopics: {str(e)}'}), 500
+    
+
+
+@app.route('/content', methods=['GET'])
+def get_content():
+    subtopic = request.args.get('subtopic')
+    
+    if not subtopic:
+        return jsonify({'error': 'Subtopic parameter is required'}), 400
+    
+    try:
+        # Replace this with your actual logic to fetch content
+        prompt = (f"Generate some content for learning this topic '{subtopic}' in the context of Java. Use a fun and interesting tone to keep the user engaged."
+                  "Do not use too big english words. keep the language conversational. The code snippets should be enclosed within ``, $ for bullet points, bold enclosed between *."
+                 "Do not use these characters for anything else or any other special characters unless needed in the text itself.")
+        # Generate content using the model
+        response = model.generate_content(prompt)
+
+        # Return the generated content as plain text
+        return jsonify({'content': response.text})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)

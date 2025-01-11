@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'content.dart';
 
 class LearningPathPage extends StatefulWidget {
   final Map<String, int>? topicScores;
@@ -81,15 +82,6 @@ class _LearningPathPageState extends State<LearningPathPage> {
       }).toList();
 
       await _fetchSubtopics(priorities);
-
-      await FirebaseFirestore.instance
-          .collection('learning_paths')
-          .doc(userId)
-          .set({
-        'path': priorities,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
 
       if (mounted) {
         setState(() {
@@ -175,6 +167,15 @@ class _LearningPathPageState extends State<LearningPathPage> {
                 children: subtopics.map((subtopic) {
                   return ListTile(
                     title: Text(subtopic),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              SubtopicContentPage(subtopic: subtopic),
+                        ),
+                      );
+                    },
                   );
                 }).toList(),
               ),
