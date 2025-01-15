@@ -143,6 +143,8 @@ class SignUpPage extends StatefulWidget {
 
 class SignUpPageState extends State<SignUpPage> {
   final TextEditingController _nameController = TextEditingController();
+  late TextEditingController _emailController;
+  late TextEditingController _passwordController;
   final TextEditingController _confirmPasswordController =
       TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -150,8 +152,18 @@ class SignUpPageState extends State<SignUpPage> {
   String _errorMessage = '';
 
   @override
+  void initState() {
+    super.initState();
+    // Initialize email and password controllers with values passed from LoginPage
+    _emailController = TextEditingController(text: widget.email);
+    _passwordController = TextEditingController(text: widget.password);
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
@@ -162,7 +174,8 @@ class SignUpPageState extends State<SignUpPage> {
     });
 
     // Check if the password and confirm password match
-    if (_confirmPasswordController.text.trim() != widget.password) {
+    if (_confirmPasswordController.text.trim() !=
+        _passwordController.text.trim()) {
       setState(() {
         _errorMessage = 'Passwords do not match.';
       });
@@ -172,8 +185,8 @@ class SignUpPageState extends State<SignUpPage> {
     try {
       final UserCredential userCredential =
           await _auth.createUserWithEmailAndPassword(
-        email: widget.email,
-        password: widget.password,
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
 
       if (userCredential.user != null) {
@@ -184,7 +197,7 @@ class SignUpPageState extends State<SignUpPage> {
             .doc(user!.uid)
             .set({
           'name': _nameController.text.trim(),
-          'email': widget.email,
+          'email': _emailController.text.trim(),
           'createdAt': Timestamp.now(), // Store the account creation time
         });
 
@@ -216,7 +229,7 @@ class SignUpPageState extends State<SignUpPage> {
           return 'An error occurred: ${error.message}';
       }
     } else {
-      return 'An unexpected error occurred.';
+      return 'An unexpected error occurred. ${error.message}';
     }
   }
 
@@ -240,25 +253,23 @@ class SignUpPageState extends State<SignUpPage> {
               ),
             ),
             const SizedBox(height: 16),
-            // Display email pre-filled from LoginPage
+            // Email field
             TextField(
-              controller: TextEditingController(text: widget.email),
+              controller: _emailController,
               decoration: const InputDecoration(
                 labelText: 'Email',
                 border: OutlineInputBorder(),
               ),
-              // enabled: false, // Make email field read-only
             ),
             const SizedBox(height: 16),
-            // Display password pre-filled from LoginPage
+            // Password field
             TextField(
-              controller: TextEditingController(text: widget.password),
+              controller: _passwordController,
               decoration: const InputDecoration(
                 labelText: 'Password',
                 border: OutlineInputBorder(),
               ),
               obscureText: true,
-              //enabled: false, // Make password field read-only
             ),
             const SizedBox(height: 16),
             // Confirm Password field
