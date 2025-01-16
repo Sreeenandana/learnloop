@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'content.dart';
+import 'quizcontent.dart'; // Assuming you have SubtopicContentPage here
 
 class LearningPathPage extends StatefulWidget {
   final Map<String, int>? topicScores;
@@ -100,6 +101,16 @@ class _LearningPathPageState extends State<LearningPathPage> {
   }
 
   Future<void> _fetchSubtopics(List<Map<String, dynamic>> priorities) async {
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+
+    if (userId == null) {
+      setState(() {
+        _errorMessage = 'No user is logged in.';
+      });
+      return;
+    }
+
     try {
       for (var priority in priorities) {
         final topic = priority['topic'];
@@ -110,13 +121,33 @@ class _LearningPathPageState extends State<LearningPathPage> {
 
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
-          _subtopics[topic] = List<String>.from(data['subtopics']);
+          final subtopics = List<String>.from(data['subtopics']);
+          final quizTitle = data['quizTitle'] ?? 'Quiz for $topic';
+
+          setState(() {
+            _subtopics[topic] = [...subtopics, quizTitle];
+          });
+
+          // Save the subtopics and quiz title in Firestore (root collection 'learningPath')
+          await firestore.collection('learningPath').doc(topic).set(
+            {
+              'subtopics': subtopics,
+              'quizTitle': quizTitle,
+            },
+            SetOptions(
+                merge: true), // Use merge to avoid overwriting existing data
+          );
         } else {
-          print('Failed to load subtopics for $topic: ${response.body}');
+          setState(() {
+            _errorMessage =
+                'Failed to load subtopics for $topic: ${response.body}';
+          });
         }
       }
     } catch (e) {
-      print('Error fetching subtopics: $e');
+      setState(() {
+        _errorMessage = 'Error fetching subtopics: $e';
+      });
     }
   }
 
@@ -164,15 +195,17 @@ class _LearningPathPageState extends State<LearningPathPage> {
                 ),
                 subtitle: Text(
                     'Score: $score, Priority: ${priority.toStringAsFixed(2)}'),
-                children: subtopics.map((subtopic) {
+                children: subtopics.map((item) {
+                  final isQuiz = item.startsWith('Quiz');
                   return ListTile(
-                    title: Text(subtopic),
+                    title: Text(item),
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              SubtopicContentPage(subtopic: subtopic),
+                          builder: (context) => isQuiz
+                              ? QuizContentPage(topic: topic)
+                              : SubtopicContentPage(subtopic: item),
                         ),
                       );
                     },
