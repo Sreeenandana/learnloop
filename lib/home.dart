@@ -37,19 +37,32 @@ class _HomePageState extends State<HomePage> {
     }
 
     try {
-      // Fetch user data from Firestore using the userId
-      final userDoc = await firestore.collection('users').doc(userId).get();
+      // Fetch initial assessment scores from the 'initialAssessment' subcollection
+      final initialAssessmentQuerySnapshot = await firestore
+          .collection('users')
+          .doc(userId)
+          .collection('initialAssessment')
+          .get();
 
-      if (userDoc.exists) {
-        // Process the user data (e.g., topicScores) here
-        final data = userDoc.data();
+      if (initialAssessmentQuerySnapshot.docs.isNotEmpty) {
+        // Process the initial assessment scores here
+        Map<String, int> scores = {};
+        for (var doc in initialAssessmentQuerySnapshot.docs) {
+          final data = doc.data();
+          final topic = data['topic'] ?? '';
+          final score = data['score'] ?? 0;
+          if (topic.isNotEmpty) {
+            scores[topic] = score;
+          }
+        }
+
         setState(() {
-          topicScores = Map<String, int>.from(data?['marks'] ?? {});
+          topicScores = scores;
           isLoading = false;
         });
-        print('User topic scores: $topicScores');
+        print('User initial assessment scores: $topicScores');
       } else {
-        print('No data found for the user.');
+        print('No initial assessment data found for the user.');
         setState(() {
           isLoading = false;
         });

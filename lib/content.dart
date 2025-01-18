@@ -4,8 +4,14 @@ import 'dart:convert';
 
 class SubtopicContentPage extends StatelessWidget {
   final String subtopic;
+  final Function(String)
+      onSubtopicFinished; // Callback for when the subtopic is finished
 
-  SubtopicContentPage({super.key, required this.subtopic});
+  SubtopicContentPage({
+    super.key,
+    required this.subtopic,
+    required this.onSubtopicFinished, // Accept the callback function
+  });
 
   // Regex patterns for bold, italic, code blocks, and bullet points
   final RegExp regexBold =
@@ -143,8 +149,21 @@ class SubtopicContentPage extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.all(16.0),
             child: SingleChildScrollView(
-              child: RichText(
-                text: _formatContent(content),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RichText(
+                    text: _formatContent(content),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () {
+                      // Mark the subtopic as finished and call the callback to move to the next subtopic
+                      onSubtopicFinished(subtopic);
+                    },
+                    child: const Text('Mark as Finished'),
+                  ),
+                ],
               ),
             ),
           );

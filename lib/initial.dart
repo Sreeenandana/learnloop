@@ -248,18 +248,16 @@ class ResultPage extends StatelessWidget {
   Future<void> _saveResultsToFirestore() async {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
-    try {
-      // Store topic scores and total score using userId as the document ID
-      await firestore.collection('users').doc(userId).set({
-        'marks': topicScores, // Save the topic scores as a map
-        'totalScore': score, // Save the total score
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      print("Results saved successfully!");
-    } catch (e) {
-      print("Error saving results: $e");
-    }
+    // Store topic scores and total score in the initialAssessment subcollection
+    await firestore
+        .collection('users')
+        .doc(userId)
+        .collection('initialAssessment')
+        .add({
+      'marks': topicScores, // Save the topic scores as a map
+      'totalScore': score, // Save the total score
+      'createdAt': FieldValue.serverTimestamp(), // Save creation timestamp
+    });
   }
 
   @override

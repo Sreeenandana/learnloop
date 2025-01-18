@@ -6,7 +6,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class QuizContentPage extends StatefulWidget {
   final String topic;
-  const QuizContentPage({super.key, required this.topic});
+  final VoidCallback onQuizFinished;
+
+  const QuizContentPage({
+    super.key,
+    required this.topic,
+    required this.onQuizFinished,
+  });
 
   @override
   State<QuizContentPage> createState() => _QuizContentPageState();
@@ -18,6 +24,7 @@ class _QuizContentPageState extends State<QuizContentPage> {
   int _score = 0;
   bool _isLoading = true;
   bool _hasError = false;
+  bool _isSubmitting = false;
 
   String? _userId;
 
@@ -36,10 +43,11 @@ class _QuizContentPageState extends State<QuizContentPage> {
           _userId = user.uid;
         });
       }
-    } catch (_) {
+    } catch (e) {
       setState(() {
         _hasError = true;
       });
+      print("Error getting user ID: $e");
     }
   }
 
@@ -59,11 +67,13 @@ class _QuizContentPageState extends State<QuizContentPage> {
         setState(() {
           _hasError = true;
         });
+        print("Failed to load questions. Status code: ${response.statusCode}");
       }
-    } catch (_) {
+    } catch (e) {
       setState(() {
         _hasError = true;
       });
+      print("Error fetching questions: $e");
     }
   }
 
@@ -106,40 +116,35 @@ class _QuizContentPageState extends State<QuizContentPage> {
       return;
     }
 
+    setState(() {
+      _isSubmitting = true;
+    });
+
     try {
-      await FirebaseFirestore.instance.collection('quiz_results').add({
-        'userId': _userId,
+      // Save quiz results to Firestore under the user's quiz_results subcollection
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_userId)
+          .collection('quiz_results') // Subcollection for quiz results
+          .add({
         'topic': widget.topic,
         'score': _score,
         'totalQuestions': _questions.length,
         'completedAt': Timestamp.now(),
       });
 
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Quiz Completed'),
-            content: Text('You scored $_score out of ${_questions.length}!'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // Close dialog
-                  Navigator.pop(context); // Go back to the previous page
-                },
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (_) {
+      // Update subtopic status and chapter progress
+      await _updateSubtopicAndChapter();
+
+      // Notify that the quiz is finished and return to the Learning Path page
+      widget.onQuizFinished();
+    } catch (e) {
       if (mounted) {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Error'),
-            content: const Text('Failed to submit results. Please try again.'),
+            content: Text('Failed to submit results. Please try again: $e'),
             actions: [
               TextButton(
                 onPressed: () {
@@ -151,6 +156,86 @@ class _QuizContentPageState extends State<QuizContentPage> {
           ),
         );
       }
+      print("Error submitting quiz results: $e");
+    } finally {
+      setState(() {
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _updateSubtopicAndChapter() async {
+    final firestore = FirebaseFirestore.instance;
+
+    try {
+      // Update the subtopic status to "complete"
+      final subtopicDoc = firestore
+          .collection('users')
+          .doc(_userId)
+          .collection('learningPath')
+          .doc(widget.topic);
+
+      final subtopicSnapshot = await subtopicDoc.get();
+      List<Map<String, dynamic>> subtopics = [];
+
+      if (subtopicSnapshot.exists) {
+        final data = subtopicSnapshot.data();
+        if (data != null) {
+          subtopics = List<Map<String, dynamic>>.from(data['subtopics'] ?? []);
+          for (var subtopic in subtopics) {
+            if (subtopic['name'] == 'Quiz for ${widget.topic}') {
+              subtopic['status'] = 'complete';
+            }
+          }
+
+          // Update the subtopics in Firestore
+          await subtopicDoc.update({'subtopics': subtopics});
+        }
+      }
+
+      // Update the chapter progress
+      final chapterDoc = firestore
+          .collection('users')
+          .doc(_userId)
+          .collection('chapters')
+          .doc(widget.topic);
+
+      final chapterSnapshot = await chapterDoc.get();
+      if (chapterSnapshot.exists) {
+        final chapterData = chapterSnapshot.data();
+        if (chapterData != null) {
+          final totalSubtopics = chapterData['totalSubtopics'] ?? 1;
+          final completedSubtopics =
+              subtopics.where((s) => s['status'] == 'complete').length;
+
+          final progressPercentage =
+              (completedSubtopics / totalSubtopics) * 100;
+
+          await chapterDoc.update({
+            'completedSubtopics': completedSubtopics,
+            'progressPercentage': progressPercentage,
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Error'),
+            content: Text('Failed to update progress: $e'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // Close dialog
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+      print("Error updating subtopic and chapter progress: $e");
     }
   }
 
@@ -210,6 +295,7 @@ class _QuizContentPageState extends State<QuizContentPage> {
                 child: Text(displayOption),
               );
             }).toList(),
+            if (_isSubmitting) const LinearProgressIndicator(),
           ],
         ),
       ),

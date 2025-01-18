@@ -8,8 +8,9 @@ import 'quizcontent.dart'; // Assuming you have SubtopicContentPage here
 
 class LearningPathPage extends StatefulWidget {
   final Map<String, int>? topicScores;
+  final String? highlightedTopic; // Added highlightedTopic parameter
 
-  const LearningPathPage({super.key, this.topicScores});
+  const LearningPathPage({super.key, this.topicScores, this.highlightedTopic});
 
   @override
   State<LearningPathPage> createState() => _LearningPathPageState();
@@ -19,7 +20,8 @@ class _LearningPathPageState extends State<LearningPathPage> {
   bool _isLoading = true;
   String _errorMessage = '';
   List<Map<String, dynamic>> _priorities = [];
-  final Map<String, List<String>> _subtopics = {};
+  final Map<String, List<Map<String, dynamic>>> _subtopics = {};
+  String? _currentHighlightedTopic;
 
   @override
   void initState() {
@@ -44,7 +46,8 @@ class _LearningPathPageState extends State<LearningPathPage> {
     if (topicScores.isEmpty) {
       try {
         final userDoc = await firestore.collection('users').doc(userId).get();
-        topicScores = Map<String, int>.from(userDoc.data()?['marks'] ?? {});
+        topicScores =
+            Map<String, int>.from(userDoc.data()?['initialAssessment'] ?? {});
       } catch (e) {
         setState(() {
           _errorMessage = 'Error fetching topic scores: $e';
@@ -82,12 +85,14 @@ class _LearningPathPageState extends State<LearningPathPage> {
         };
       }).toList();
 
-      await _fetchSubtopics(priorities);
+      await _fetchSubtopics(userId, priorities);
 
       if (mounted) {
         setState(() {
           _priorities = priorities;
           _isLoading = false;
+          _currentHighlightedTopic =
+              widget.highlightedTopic ?? _priorities.first['topic'];
         });
       }
     } catch (e) {
@@ -100,16 +105,9 @@ class _LearningPathPageState extends State<LearningPathPage> {
     }
   }
 
-  Future<void> _fetchSubtopics(List<Map<String, dynamic>> priorities) async {
+  Future<void> _fetchSubtopics(
+      String userId, List<Map<String, dynamic>> priorities) async {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-
-    if (userId == null) {
-      setState(() {
-        _errorMessage = 'No user is logged in.';
-      });
-      return;
-    }
 
     try {
       for (var priority in priorities) {
@@ -121,22 +119,28 @@ class _LearningPathPageState extends State<LearningPathPage> {
 
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
-          final subtopics = List<String>.from(data['subtopics']);
+          final subtopics = List<Map<String, dynamic>>.from(data['subtopics']
+              .map((subtopic) => {'name': subtopic, 'status': 'incomplete'}));
           final quizTitle = data['quizTitle'] ?? 'Quiz for $topic';
 
           setState(() {
-            _subtopics[topic] = [...subtopics, quizTitle];
+            _subtopics[topic] = [...subtopics];
           });
 
-          // Save the subtopics and quiz title in Firestore (root collection 'learningPath')
-          await firestore.collection('learningPath').doc(topic).set(
-            {
-              'subtopics': subtopics,
-              'quizTitle': quizTitle,
-            },
-            SetOptions(
-                merge: true), // Use merge to avoid overwriting existing data
-          );
+          // Save the learning path for the user in Firestore
+          await firestore
+              .collection('users')
+              .doc(userId)
+              .collection('learningPath')
+              .doc(topic)
+              .set({
+            'priority': topicPriority,
+            'subtopics': subtopics,
+            'quizTitle': quizTitle,
+            'totalSubtopics': subtopics.length,
+            'completedSubtopics': 0,
+            'progressPercentage': 0,
+          });
         } else {
           setState(() {
             _errorMessage =
@@ -147,6 +151,48 @@ class _LearningPathPageState extends State<LearningPathPage> {
     } catch (e) {
       setState(() {
         _errorMessage = 'Error fetching subtopics: $e';
+      });
+    }
+  }
+
+  // Callback to mark a subtopic as complete and highlight next topic
+  void _onSubtopicFinished(String topic, String subtopic) async {
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+
+    if (userId == null) return;
+
+    // Update subtopic status in Firestore
+    final subtopics = _subtopics[topic] ?? [];
+    final subtopicIndex = subtopics.indexWhere((s) => s['name'] == subtopic);
+    if (subtopicIndex != -1) {
+      subtopics[subtopicIndex]['status'] = 'complete';
+    }
+
+    // Update progress in Firestore
+    await firestore
+        .collection('users')
+        .doc(userId)
+        .collection('learningPath')
+        .doc(topic)
+        .update({
+      'subtopics': subtopics,
+      'completedSubtopics': subtopics
+          .where((subtopic) => subtopic['status'] == 'complete')
+          .length,
+      'progressPercentage': (subtopics
+                  .where((subtopic) => subtopic['status'] == 'complete')
+                  .length /
+              subtopics.length) *
+          100,
+    });
+
+    // Move to next topic (highlight next topic)
+    final nextTopicIndex =
+        _priorities.indexWhere((t) => t['topic'] == topic) + 1;
+    if (nextTopicIndex < _priorities.length) {
+      setState(() {
+        _currentHighlightedTopic = _priorities[nextTopicIndex]['topic'];
       });
     }
   }
@@ -185,27 +231,59 @@ class _LearningPathPageState extends State<LearningPathPage> {
             final priority = _priorities[index]['priority'];
             final subtopics = _subtopics[topic] ?? [];
 
+            // Calculate progress percentage
+            final totalSubtopics = subtopics.length;
+            final completedSubtopics = subtopics
+                .where((subtopic) => subtopic['status'] == 'complete')
+                .length;
+            final progressPercentage = totalSubtopics > 0
+                ? (completedSubtopics / totalSubtopics) * 100
+                : 0;
+
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8.0),
+              color: _currentHighlightedTopic == topic
+                  ? Colors.blue.shade100
+                  : null,
               child: ExpansionTile(
-                title: Text(
-                  topic,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold),
+                title: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      topic,
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    Text('${progressPercentage.toStringAsFixed(0)}% Complete'),
+                  ],
                 ),
                 subtitle: Text(
                     'Score: $score, Priority: ${priority.toStringAsFixed(2)}'),
-                children: subtopics.map((item) {
-                  final isQuiz = item.startsWith('Quiz');
+                children: subtopics.map((subtopic) {
+                  final name = subtopic['name'];
+                  final status = subtopic['status'];
+                  final isQuiz = name.startsWith('Quiz');
+
                   return ListTile(
-                    title: Text(item),
+                    title: Text(name),
+                    subtitle: Text('Status: $status'),
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => isQuiz
-                              ? QuizContentPage(topic: topic)
-                              : SubtopicContentPage(subtopic: item),
+                              ? QuizContentPage(
+                                  topic: topic,
+                                  onQuizFinished: () {
+                                    _onSubtopicFinished(topic, name);
+                                  },
+                                )
+                              : SubtopicContentPage(
+                                  subtopic: name,
+                                  onSubtopicFinished: (subtopicName) {
+                                    _onSubtopicFinished(topic, subtopicName);
+                                  },
+                                ),
                         ),
                       );
                     },
