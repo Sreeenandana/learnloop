@@ -13,8 +13,27 @@ class QuizApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Python Quiz',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      debugShowCheckedModeBanner: false, // Remove debug banner
+      theme: ThemeData(
+        primarySwatch: Colors.green,
+        scaffoldBackgroundColor: Colors.white,
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(color: Colors.black),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color.fromARGB(255, 6, 186, 12),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+            textStyle:
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.green,
+          foregroundColor: Colors.white,
+        ),
+      ),
+      debugShowCheckedModeBanner: false,
       home: const LevelSelectionPage(),
     );
   }
@@ -39,10 +58,8 @@ class LevelSelectionPage extends StatelessWidget {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment:
-              MainAxisAlignment.center, // Center the buttons vertically
-          crossAxisAlignment:
-              CrossAxisAlignment.center, // Center the buttons horizontally
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const Text(
               'Select a difficulty level:',
@@ -135,34 +152,20 @@ class _QuizPageState extends State<QuizPage> {
     final correctAnswer = question['correct_answer'];
     final topic = question['topic'];
 
-    // Check if correctAnswer or topic is null
-    if (correctAnswer == null) {
-      _showError('Error: Missing data for correct_answer.');
-      return;
-    }
-    if (topic == null) {
-      _showError('Error: Missing data for topic.');
+    if (correctAnswer == null || topic == null) {
+      _showError('Error: Missing data for question.');
       return;
     }
 
     if (!_topicScores.containsKey(topic)) {
-      _topicScores[topic] = 0; // Initialize score for this topic
-      //_showError("initialised for $topic");
+      _topicScores[topic] = 0;
     }
 
-    // Check if the answer is correct
     if (selectedAnswer == correctAnswer) {
-      // Check if topic is missing and initialize
-
-      // Increment score for this topic
       _topicScores[topic] = _topicScores[topic]! + 1;
-      // _showError("score is $_topicScores[topic] for $topic");
-      //print("score is $_topicScores[topic] for $topic");
-
-      // Increment total score
       _score++;
     }
-    // Move to the next question or show results if last question
+
     if (_currentQuestionIndex < _questions.length - 1) {
       setState(() {
         _currentQuestionIndex++;
@@ -173,7 +176,6 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   void _showResults() {
-    // Get userId from FirebaseAuth
     final userId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown_user';
 
     Navigator.pushReplacement(
@@ -183,7 +185,7 @@ class _QuizPageState extends State<QuizPage> {
           score: _score,
           total: _questions.length,
           topicScores: _topicScores,
-          userId: userId, // Pass userId to ResultPage
+          userId: userId,
         ),
       ),
     );
@@ -249,14 +251,12 @@ class ResultPage extends StatelessWidget {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
     try {
-      // Store topic scores and total score using userId as the document ID
       await firestore.collection('users').doc(userId).set({
-        'marks': topicScores, // Save the topic scores as a map
-        'totalScore': score, // Save the total score
+        'marks': topicScores,
+        'totalScore': score,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      print("Results saved successfully!");
     } catch (e) {
       print("Error saving results: $e");
     }
@@ -264,7 +264,6 @@ class ResultPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Save results to Firestore
     _saveResultsToFirestore();
 
     return Scaffold(
