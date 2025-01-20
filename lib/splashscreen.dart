@@ -43,7 +43,8 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFA5FF63), // Customize the background color
+      backgroundColor: const Color.fromRGBO(
+          76, 175, 80, 1), // Customize the background color
       body: Stack(
         children: [
           PageView(
@@ -69,7 +70,8 @@ class _SplashScreenState extends State<SplashScreen> {
               // Slide 3
               buildPage(
                 title: 'Achieve Your Goals',
-                subtitle: 'Track your progress and celebrate your achievements.',
+                subtitle:
+                    'Track your progress and celebrate your achievements.',
                 icon: Icons.emoji_events,
               ),
             ],
@@ -105,7 +107,10 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
-  Widget buildPage({required String title, required String subtitle, required IconData icon}) {
+  Widget buildPage(
+      {required String title,
+      required String subtitle,
+      required IconData icon}) {
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Column(
