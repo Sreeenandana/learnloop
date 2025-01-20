@@ -12,8 +12,27 @@ class QuizApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Python Quiz',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      debugShowCheckedModeBanner: false, // Remove debug banner
+      theme: ThemeData(
+        primarySwatch: Colors.green,
+        scaffoldBackgroundColor: Colors.white,
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(color: Colors.black),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color.fromARGB(255, 6, 186, 12),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+            textStyle:
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.green,
+          foregroundColor: Colors.white,
+        ),
+      ),
+      debugShowCheckedModeBanner: false,
       home: const LevelSelectionPage(),
     );
   }
@@ -38,10 +57,8 @@ class LevelSelectionPage extends StatelessWidget {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment:
-              MainAxisAlignment.center, // Center the buttons vertically
-          crossAxisAlignment:
-              CrossAxisAlignment.center, // Center the buttons horizontally
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const Text(
               'Select a difficulty level:',
@@ -234,8 +251,8 @@ class _QuizPageState extends State<QuizPage> {
     final topic = question['topic'] ??
         'General'; // Default to 'General' if topic is missing
 
-    if (correctAnswer == null) {
-      _showError('Error: Missing data for correct_answer.');
+    if (correctAnswer == null || topic == null) {
+      _showError('Error: Missing data for question.');
       return;
     }
 
@@ -244,14 +261,10 @@ class _QuizPageState extends State<QuizPage> {
       _topicScores[topic] = 0;
     }
 
-    // Update scores based on the selected answer
     if (selectedAnswer == correctAnswer) {
-      _topicScores[topic] =
-          _topicScores[topic]! + 1; // Increment the score for the topic
+      _topicScores[topic] = _topicScores[topic]! + 1;
       _score++;
     }
-
-    // Move to the next question or show results if it’s the last question
     if (_currentQuestionIndex < _questions.length - 1) {
       setState(() {
         _currentQuestionIndex++;
@@ -268,9 +281,12 @@ class _QuizPageState extends State<QuizPage> {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => HomePage(
-            //topicScores: _topicScores,  // Pass topicScores to HomePage
-            ),
+        builder: (context) => ResultPage(
+          score: _score,
+          total: _questions.length,
+          topicScores: _topicScores,
+          userId: userId,
+        ),
       ),
     );
   }
@@ -309,6 +325,85 @@ class _QuizPageState extends State<QuizPage> {
                   ),
                 );
               },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ResultPage extends StatelessWidget {
+  final int score;
+  final int total;
+  final Map<String, int> topicScores;
+  final String userId;
+
+  const ResultPage({
+    super.key,
+    required this.score,
+    required this.total,
+    required this.topicScores,
+    required this.userId,
+  });
+
+  Future<void> _saveResultsToFirestore() async {
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+
+    try {
+      await firestore.collection('users').doc(userId).set({
+        'marks': topicScores,
+        'totalScore': score,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print("Error saving results: $e");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _saveResultsToFirestore();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Quiz Results')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Your Score: $score / $total',
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        LearningPathPage(topicScores: topicScores),
+                  ),
+                );
+              },
+              child: const Text('View Learning Path'),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const HomePage(),
+                  ),
+                  (route) => false,
+                );
+              },
+              child: const Text('Back to Home'),
             ),
           ],
         ),
