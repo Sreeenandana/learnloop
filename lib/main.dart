@@ -1,8 +1,10 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
-import 'login.dart'; // Correctly import the login page
+import 'home.dart'; // Import your HomePage
+import 'login.dart'; // Import your LoginPage
+import 'splashscreen.dart'; // Import your sliding splash screen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,7 +28,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue, // Set the primary color theme
       ),
-      home: const LoginPage(), // Set the LoginPage as the initial page
+      home: const SplashScreen(), // Use the sliding splash screen
     );
   }
 }
