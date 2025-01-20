@@ -48,10 +48,15 @@ class _LearningPathPageState extends State<LearningPathPage> {
     Map<String, int> topicScores = widget.topicScores ?? {};
     print('Received topicScores: $topicScores'); // Debugging print statement
 
+    // Filter out the totalscore entry (always filter regardless of source)
+    topicScores.remove('totalscore');
+
     if (topicScores.isEmpty) {
       try {
         final userDoc = await firestore.collection('users').doc(userId).get();
         final data = userDoc.data();
+
+        print('Fetched user data: $data'); // Debugging print statement
 
         if (data == null || !data.containsKey('initialAssessment')) {
           setState(() {
@@ -64,7 +69,6 @@ class _LearningPathPageState extends State<LearningPathPage> {
 
         final initialAssessment = data['initialAssessment'];
         topicScores = Map<String, int>.from(initialAssessment['marks'] ?? {});
-        final totalScore = initialAssessment['totalScore'] ?? 0;
 
         if (topicScores.isEmpty) {
           setState(() {
@@ -74,49 +78,54 @@ class _LearningPathPageState extends State<LearningPathPage> {
           return;
         }
 
-        final maxScore = topicScores.values.isNotEmpty
-            ? topicScores.values.reduce((a, b) => a > b ? a : b)
-            : 1;
-
-        List<Map<String, dynamic>> priorities =
-            topicScores.entries.map((entry) {
-          final normalizedScore = entry.value / maxScore;
-          final priority = 1 - normalizedScore;
-          return {
-            'topic': entry.key,
-            'priority': priority,
-            'score': entry.value,
-          };
-        }).toList();
-
-        priorities.add({
-          'topic': 'totalscore',
-          'priority': 0.0,
-          'score': totalScore,
-        });
-
+        // No need to filter totalscore again as it has already been removed
         print(
-            'Priorities after assessment: $priorities'); // Debugging print statement
-
-        for (var priority in priorities) {
-          final topic = priority['topic'];
-          await _generateAndLoadSubtopics(topic);
-        }
-
-        if (mounted) {
-          setState(() {
-            _priorities = priorities;
-            _isLoading = false;
-            _currentHighlightedTopic =
-                widget.highlightedTopic ?? _priorities.first['topic'];
-          });
-        }
+            'Filtered topicScores: $topicScores'); // Debugging print statement
       } catch (e) {
         setState(() {
           _errorMessage = 'Error fetching topic scores: $e';
           _isLoading = false;
         });
+        return;
       }
+    }
+
+    try {
+      final maxScore = topicScores.values.isNotEmpty
+          ? topicScores.values.reduce((a, b) => a > b ? a : b)
+          : 1;
+
+      List<Map<String, dynamic>> priorities = topicScores.entries.map((entry) {
+        final normalizedScore = entry.value / maxScore;
+        final priority = 1 - normalizedScore;
+        return {
+          'topic': entry.key,
+          'priority': priority,
+          'score': entry.value,
+        };
+      }).toList();
+
+      print(
+          'Priorities after assessment: $priorities'); // Debugging print statement
+
+      for (var priority in priorities) {
+        final topic = priority['topic'];
+        await _generateAndLoadSubtopics(topic);
+      }
+
+      if (mounted) {
+        setState(() {
+          _priorities = priorities;
+          _isLoading = false;
+          _currentHighlightedTopic =
+              widget.highlightedTopic ?? _priorities.first['topic'];
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error generating learning path: $e';
+        _isLoading = false;
+      });
     }
   }
 
@@ -211,7 +220,7 @@ class _LearningPathPageState extends State<LearningPathPage> {
 
   List<Map<String, dynamic>> _parseSubtopics(String responseText) {
     final subtopics = responseText.split('\n').where((subtopic) {
-      return subtopic.trim().isNotEmpty;
+      return subtopic.trim().isNotEmpty && !subtopic.startsWith('Quiz:');
     }).map((subtopic) {
       return {
         'name': subtopic,
