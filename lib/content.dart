@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'dart:convert';
 
 class SubtopicContentPage extends StatelessWidget {
@@ -22,17 +22,31 @@ class SubtopicContentPage extends StatelessWidget {
   final RegExp regexBullet = RegExp(r'^\$(.*)',
       multiLine: true); // Bullet points (lines starting with $)
 
-  // Fetch content for subtopic
+  // Google Generative AI API Key
+  final String _apiKey =
+      'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44'; // Replace with your actual API key
+
+  // Fetch content for subtopic using Google Generative AI
   Future<String> _fetchSubtopicContent(String subtopic) async {
     try {
-      final response = await http
-          .get(Uri.parse('http://127.0.0.1:5000/content?subtopic=$subtopic'));
+      print("in cp");
+      // Initialize the Generative Model
+      final model = GenerativeModel(
+        model: 'gemini-1.5-flash', // Replace with your preferred model
+        apiKey: _apiKey,
+      );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return data['content'] ?? 'No content available.';
+      // Create a prompt to generate content for the subtopic
+      final prompt = "Generate detailed content for the subtopic: $subtopic.";
+
+      // Generate content using the AI model
+      final content = [Content.text(prompt)];
+      final response = await model.generateContent(content);
+
+      if (response.text != null) {
+        return response.text!;
       } else {
-        return 'Failed to load content: ${response.body}';
+        return 'Failed to load content: Unable to generate response.';
       }
     } catch (e) {
       return 'Error fetching content: $e';
@@ -77,6 +91,7 @@ class SubtopicContentPage extends StatelessWidget {
 
   // Function to process bold, italic text, and bullet points
   List<TextSpan> _processTextStyles(String content) {
+    print("in pts of cp");
     List<TextSpan> resultSpans = [];
     int lastEnd = 0;
 

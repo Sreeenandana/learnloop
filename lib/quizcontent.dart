@@ -1,89 +1,158 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'home.dart';
 
-class QuizContentPage extends StatefulWidget {
+class ChapterQuiz extends StatefulWidget {
   final String topic;
   final VoidCallback onQuizFinished;
 
-  const QuizContentPage({
+  const ChapterQuiz({
     super.key,
     required this.topic,
     required this.onQuizFinished,
   });
 
   @override
-  State<QuizContentPage> createState() => _QuizContentPageState();
+  State<ChapterQuiz> createState() => _ChapterQuizState();
 }
 
-class _QuizContentPageState extends State<QuizContentPage> {
+class _ChapterQuizState extends State<ChapterQuiz> {
   List<dynamic> _questions = [];
   int _currentQuestionIndex = 0;
   int _score = 0;
   bool _isLoading = true;
-  bool _hasError = false;
-  bool _isSubmitting = false;
-
-  String? _userId;
+  final Map<String, int> _topicScores = {};
+  final String _apiKey =
+      'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44'; // Replace with your actual API key
 
   @override
   void initState() {
     super.initState();
-    _getUserId();
     _fetchQuestions();
-  }
-
-  Future<void> _getUserId() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        setState(() {
-          _userId = user.uid;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _hasError = true;
-      });
-      print("Error getting user ID: $e");
-    }
   }
 
   Future<void> _fetchQuestions() async {
     try {
-      final response = await http.get(
-        Uri.parse('http://127.0.0.1:5000/questions?topic=${widget.topic}'),
+      final model = GenerativeModel(
+        model: 'gemini-1.5-flash',
+        apiKey: _apiKey,
       );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+      final prompt = _generatePromptForQuiz(widget.topic);
+      final content = [Content.text(prompt)];
+
+      final response = await model.generateContent(content);
+
+      if (response.text != null) {
         setState(() {
-          _questions = data['mcqs'];
+          _questions = _parseQuestions(response.text!);
           _isLoading = false;
         });
       } else {
         setState(() {
-          _hasError = true;
+          _isLoading = false;
+          _questions = [];
         });
-        print("Failed to load questions. Status code: ${response.statusCode}");
       }
     } catch (e) {
       setState(() {
-        _hasError = true;
+        _isLoading = false;
+        _questions = [];
       });
-      print("Error fetching questions: $e");
+      _showError('Error fetching questions: $e');
     }
   }
 
+  String _generatePromptForQuiz(String topic) {
+    return "Generate 10 multiple choice questions (MCQs) about Java, on topic $topic. "
+        "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
+        "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. "
+        "Do not provide any other message or use any special characters unless necessary.";
+  }
+
+  List<dynamic> _parseQuestions(String responseText) {
+    final List<dynamic> parsedQuestions = [];
+    final lines = responseText.split('\n');
+    Map<String, String> currentQuestion = {};
+
+    for (var line in lines) {
+      line = line.trim();
+      if (line.startsWith('qstn:')) {
+        if (currentQuestion.isNotEmpty) {
+          if (_isValidQuestion(currentQuestion)) {
+            parsedQuestions.add(_buildQuestionMap(currentQuestion));
+          }
+          currentQuestion.clear();
+        }
+        currentQuestion['qstn'] = line.substring(5).trim();
+      } else if (line.startsWith('opt:')) {
+        currentQuestion['opt'] = line.substring(4).trim();
+      } else if (line.startsWith('ans:')) {
+        currentQuestion['ans'] = line.substring(4).trim();
+      } else if (line.startsWith('top:')) {
+        currentQuestion['top'] = line.substring(4).trim();
+      }
+    }
+
+    if (_isValidQuestion(currentQuestion)) {
+      parsedQuestions.add(_buildQuestionMap(currentQuestion));
+    }
+
+    return parsedQuestions;
+  }
+
+  bool _isValidQuestion(Map<String, String> question) {
+    return question.containsKey('qstn') &&
+        question.containsKey('opt') &&
+        question.containsKey('ans') &&
+        question.containsKey('top');
+  }
+
+  Map<String, dynamic> _buildQuestionMap(Map<String, String> question) {
+    return {
+      'question': question['qstn'] ?? '',
+      'options':
+          (question['opt'] ?? '').split(',').map((opt) => opt.trim()).toList(),
+      'correct_answer': question['ans'] ?? '',
+      'topic': question['top'] ?? '',
+    };
+  }
+
+  void _showError(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _submitAnswer(String selectedAnswer) {
-    final correctAnswer = _questions[_currentQuestionIndex]['correct_answer'];
+    final question = _questions[_currentQuestionIndex];
+    final correctAnswer = question['correct_answer'];
+    final topic = question['topic'] ?? 'General';
+
+    if (correctAnswer == null) {
+      _showError('Error: Missing data for correct_answer.');
+      return;
+    }
+
+    if (!_topicScores.containsKey(topic)) {
+      _topicScores[topic] = 0;
+    }
 
     if (selectedAnswer == correctAnswer) {
-      setState(() {
-        _score++;
-      });
+      _topicScores[topic] = _topicScores[topic]! + 1;
+      _score++;
     }
 
     if (_currentQuestionIndex < _questions.length - 1) {
@@ -91,211 +160,79 @@ class _QuizContentPageState extends State<QuizContentPage> {
         _currentQuestionIndex++;
       });
     } else {
-      _submitResults();
+      _finishQuiz();
     }
   }
 
-  Future<void> _submitResults() async {
-    if (_userId == null) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Error'),
-            content:
-                const Text('Failed to identify user. Please log in again.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-      return;
-    }
+  Future<void> _finishQuiz() async {
+    widget.onQuizFinished();
 
-    setState(() {
-      _isSubmitting = true;
-    });
-
-    try {
-      // Save quiz results to Firestore under the user's quiz_results subcollection
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_userId)
-          .collection('quiz_results') // Subcollection for quiz results
-          .add({
-        'topic': widget.topic,
-        'score': _score,
-        'totalQuestions': _questions.length,
-        'completedAt': Timestamp.now(),
-      });
-
-      // Update subtopic status and chapter progress
-      await _updateSubtopicAndChapter();
-
-      // Notify that the quiz is finished and return to the Learning Path page
-      widget.onQuizFinished();
-    } catch (e) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Error'),
-            content: Text('Failed to submit results. Please try again: $e'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // Close dialog
-                },
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-      print("Error submitting quiz results: $e");
-    } finally {
-      setState(() {
-        _isSubmitting = false;
-      });
-    }
-  }
-
-  Future<void> _updateSubtopicAndChapter() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown_user';
     final firestore = FirebaseFirestore.instance;
 
     try {
-      // Update the subtopic status to "complete"
-      final subtopicDoc = firestore
-          .collection('users')
-          .doc(_userId)
-          .collection('learningPath')
-          .doc(widget.topic);
-
-      final subtopicSnapshot = await subtopicDoc.get();
-      List<Map<String, dynamic>> subtopics = [];
-
-      if (subtopicSnapshot.exists) {
-        final data = subtopicSnapshot.data();
-        if (data != null) {
-          subtopics = List<Map<String, dynamic>>.from(data['subtopics'] ?? []);
-          for (var subtopic in subtopics) {
-            if (subtopic['name'] == 'Quiz for ${widget.topic}') {
-              subtopic['status'] = 'complete';
+      // Store the score in Firestore under the user's document
+      await firestore.collection('users').doc(userId).set(
+        {
+          'quizScores': FieldValue.arrayUnion([
+            {
+              'topic': widget.topic,
+              'score': _score,
+              'totalQuestions': _questions.length,
+              'timestamp': FieldValue.serverTimestamp(),
             }
-          }
+          ])
+        },
+        SetOptions(merge: true), // Use merge to avoid overwriting other data
+      );
 
-          // Update the subtopics in Firestore
-          await subtopicDoc.update({'subtopics': subtopics});
-        }
-      }
-
-      // Update the chapter progress
-      final chapterDoc = firestore
-          .collection('users')
-          .doc(_userId)
-          .collection('chapters')
-          .doc(widget.topic);
-
-      final chapterSnapshot = await chapterDoc.get();
-      if (chapterSnapshot.exists) {
-        final chapterData = chapterSnapshot.data();
-        if (chapterData != null) {
-          final totalSubtopics = chapterData['totalSubtopics'] ?? 1;
-          final completedSubtopics =
-              subtopics.where((s) => s['status'] == 'complete').length;
-
-          final progressPercentage =
-              (completedSubtopics / totalSubtopics) * 100;
-
-          await chapterDoc.update({
-            'completedSubtopics': completedSubtopics,
-            'progressPercentage': progressPercentage,
-          });
-        }
-      }
+      print("Quiz score stored successfully.");
     } catch (e) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Error'),
-            content: Text('Failed to update progress: $e'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // Close dialog
-                },
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-      print("Error updating subtopic and chapter progress: $e");
+      print("Error storing quiz score: $e");
     }
+
+    // Optionally, navigate back to the home page or another screen
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => HomePage()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading || _userId == null) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
-    if (_hasError) {
+    if (_isLoading) {
       return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('Failed to load questions. Please try again later.'),
-              ElevatedButton(
-                onPressed: _fetchQuestions,
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
+        appBar: AppBar(title: const Text('Quiz')),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    final currentQuestion = _questions[_currentQuestionIndex];
-
+    final question = _questions[_currentQuestionIndex];
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Quiz: ${widget.topic}'),
-      ),
+      appBar: AppBar(title: Text('Question ${_currentQuestionIndex + 1}')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Question ${_currentQuestionIndex + 1}/${_questions.length}',
+              question['question'],
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 16),
-            Text(
-              currentQuestion['question'],
-              style: const TextStyle(fontSize: 16),
+            const SizedBox(height: 20),
+            ...List.generate(
+              question['options'].length,
+              (index) {
+                final option = question['options'][index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10.0),
+                  child: ElevatedButton(
+                    onPressed: () => _submitAnswer(option),
+                    child: Text(option),
+                  ),
+                );
+              },
             ),
-            const SizedBox(height: 16),
-            ...currentQuestion['options'].map<Widget>((option) {
-              final displayOption =
-                  option.startsWith('opt:') ? option.substring(4) : option;
-              return ElevatedButton(
-                onPressed: () => _submitAnswer(displayOption),
-                child: Text(displayOption),
-              );
-            }).toList(),
-            if (_isSubmitting) const LinearProgressIndicator(),
           ],
         ),
       ),

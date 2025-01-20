@@ -1,14 +1,12 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'content.dart';
-import 'quizcontent.dart'; // Assuming you have SubtopicContentPage here
+import 'package:flutter/material.dart';
+import 'initial.dart'; // Import your initial assessment page
 
 class LearningPathPage extends StatefulWidget {
   final Map<String, int>? topicScores;
-  final String? highlightedTopic; // Added highlightedTopic parameter
+  final String? highlightedTopic;
 
   const LearningPathPage({super.key, this.topicScores, this.highlightedTopic});
 
@@ -22,6 +20,12 @@ class _LearningPathPageState extends State<LearningPathPage> {
   List<Map<String, dynamic>> _priorities = [];
   final Map<String, List<Map<String, dynamic>>> _subtopics = {};
   String? _currentHighlightedTopic;
+
+  final _auth = FirebaseAuth.instance;
+
+  // Google Generative AI API Key
+  final String _apiKey =
+      'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44'; // Replace with your actual API key
 
   @override
   void initState() {
@@ -42,159 +46,181 @@ class _LearningPathPageState extends State<LearningPathPage> {
     }
 
     Map<String, int> topicScores = widget.topicScores ?? {};
+    print('Received topicScores: $topicScores'); // Debugging print statement
 
     if (topicScores.isEmpty) {
       try {
         final userDoc = await firestore.collection('users').doc(userId).get();
-        topicScores =
-            Map<String, int>.from(userDoc.data()?['initialAssessment'] ?? {});
+        final data = userDoc.data();
+
+        if (data == null || !data.containsKey('initialAssessment')) {
+          setState(() {
+            _errorMessage =
+                'Initial assessment data is missing. Please complete the initial assessment.';
+            _isLoading = false;
+          });
+          return;
+        }
+
+        final initialAssessment = data['initialAssessment'];
+        topicScores = Map<String, int>.from(initialAssessment['marks'] ?? {});
+        final totalScore = initialAssessment['totalScore'] ?? 0;
+
+        if (topicScores.isEmpty) {
+          setState(() {
+            _errorMessage = 'No topic scores found in the initial assessment.';
+            _isLoading = false;
+          });
+          return;
+        }
+
+        final maxScore = topicScores.values.isNotEmpty
+            ? topicScores.values.reduce((a, b) => a > b ? a : b)
+            : 1;
+
+        List<Map<String, dynamic>> priorities =
+            topicScores.entries.map((entry) {
+          final normalizedScore = entry.value / maxScore;
+          final priority = 1 - normalizedScore;
+          return {
+            'topic': entry.key,
+            'priority': priority,
+            'score': entry.value,
+          };
+        }).toList();
+
+        priorities.add({
+          'topic': 'totalscore',
+          'priority': 0.0,
+          'score': totalScore,
+        });
+
+        print(
+            'Priorities after assessment: $priorities'); // Debugging print statement
+
+        for (var priority in priorities) {
+          final topic = priority['topic'];
+          await _generateAndLoadSubtopics(topic);
+        }
+
+        if (mounted) {
+          setState(() {
+            _priorities = priorities;
+            _isLoading = false;
+            _currentHighlightedTopic =
+                widget.highlightedTopic ?? _priorities.first['topic'];
+          });
+        }
       } catch (e) {
         setState(() {
           _errorMessage = 'Error fetching topic scores: $e';
           _isLoading = false;
         });
-        return;
       }
     }
+  }
 
-    if (topicScores.isEmpty) {
+  Future<void> _generateAndLoadSubtopics(String topic) async {
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+
+    if (userId == null) {
       setState(() {
-        _errorMessage = 'No topic scores found.';
-        _isLoading = false;
+        _errorMessage = 'No user is logged in.';
       });
       return;
     }
 
-    await _generateLearningPath(userId, topicScores);
-  }
-
-  Future<void> _generateLearningPath(
-      String userId, Map<String, int> topicScores) async {
-    try {
-      final maxScore = topicScores.values.isNotEmpty
-          ? topicScores.values.reduce((a, b) => a > b ? a : b)
-          : 1;
-
-      List<Map<String, dynamic>> priorities = topicScores.entries.map((entry) {
-        final normalizedScore = entry.value / maxScore;
-        final priority = 1 - normalizedScore;
-        return {
-          'topic': entry.key,
-          'priority': priority,
-          'score': entry.value,
-        };
-      }).toList();
-
-      await _fetchSubtopics(userId, priorities);
-
-      if (mounted) {
-        setState(() {
-          _priorities = priorities;
-          _isLoading = false;
-          _currentHighlightedTopic =
-              widget.highlightedTopic ?? _priorities.first['topic'];
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Error generating learning path: $e';
-          _isLoading = false;
-        });
-      }
+    if (_subtopics.containsKey(topic) && _subtopics[topic]!.isNotEmpty) {
+      return; // Subtopics already loaded
     }
-  }
-
-  Future<void> _fetchSubtopics(
-      String userId, List<Map<String, dynamic>> priorities) async {
-    final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
     try {
-      for (var priority in priorities) {
-        final topic = priority['topic'];
-        final topicPriority = priority['priority'];
+      final topicPriorityEntry = _priorities.firstWhere(
+        (priority) => priority['topic'] == topic,
+        orElse: () => {'topic': topic, 'priority': 1.0},
+      );
 
-        final response = await http.get(Uri.parse(
-            'http://127.0.0.1:5000/subtopics?topic=$topic&priority=$topicPriority'));
+      final topicPriority = topicPriorityEntry['priority'];
+      print(
+          'Generating subtopics for topic: $topic with priority: $topicPriority'); // Debugging print statement
 
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          final subtopics = List<Map<String, dynamic>>.from(data['subtopics']
-              .map((subtopic) => {'name': subtopic, 'status': 'incomplete'}));
-          final quizTitle = data['quizTitle'] ?? 'Quiz for $topic';
+      final prompt = _generateSubtopicPrompt(topic, topicPriority);
 
-          setState(() {
-            _subtopics[topic] = [...subtopics];
-          });
+      final model = GenerativeModel(
+        model: 'gemini-1.5-flash', // Replace with your preferred model
+        apiKey: _apiKey,
+      );
 
-          // Save the learning path for the user in Firestore
-          await firestore
-              .collection('users')
-              .doc(userId)
-              .collection('learningPath')
-              .doc(topic)
-              .set({
-            'priority': topicPriority,
-            'subtopics': subtopics,
-            'quizTitle': quizTitle,
-            'totalSubtopics': subtopics.length,
-            'completedSubtopics': 0,
-            'progressPercentage': 0,
-          });
-        } else {
+      final content = [Content.text(prompt)];
+      final response = await model.generateContent(content);
+
+      if (response.text != null) {
+        final subtopics = _parseSubtopics(response.text!);
+
+        if (subtopics.isEmpty) {
           setState(() {
             _errorMessage =
-                'Failed to load subtopics for $topic: ${response.body}';
+                'Generated subtopics for $topic are empty. Skipping topic.';
           });
+          return;
         }
+
+        final quizTitle = 'Quiz for $topic';
+
+        setState(() {
+          _subtopics[topic] = subtopics;
+        });
+
+        await firestore
+            .collection('users')
+            .doc(userId)
+            .collection('learningPath')
+            .doc(topic)
+            .set({
+          'priority': topicPriority,
+          'subtopics': subtopics,
+          'quizTitle': quizTitle,
+          'totalSubtopics': subtopics.length,
+          'completedSubtopics': 0,
+          'progressPercentage': 0,
+        });
+
+        print(
+            'Subtopics generated and saved for topic: $topic'); // Debugging print statement
+      } else {
+        setState(() {
+          _errorMessage =
+              'Failed to load subtopics for $topic: Unable to generate response.';
+        });
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'Error fetching subtopics: $e';
+        _errorMessage = 'Error generating subtopics: $e';
       });
     }
   }
 
-  // Callback to mark a subtopic as complete and highlight next topic
-  void _onSubtopicFinished(String topic, String subtopic) async {
-    final FirebaseFirestore firestore = FirebaseFirestore.instance;
-    final userId = FirebaseAuth.instance.currentUser?.uid;
+  String _generateSubtopicPrompt(String topic, double priority) {
+    return "Generate 5 subtopics for the topic $topic based on its priority $priority (0: high priority, 1: low priority). "
+        "For high priority topics, assume the user is a beginner, and for low priority, assume the user has advanced knowledge. "
+        "List the subtopics as a plain text, each separated by a newline. "
+        "After the last subtopic, in the next line, include a title for quiz. It should always start with 'Quiz:' "
+        "Do not provide any other message or use special characters unless necessary.";
+  }
 
-    if (userId == null) return;
+  List<Map<String, dynamic>> _parseSubtopics(String responseText) {
+    final subtopics = responseText.split('\n').where((subtopic) {
+      return subtopic.trim().isNotEmpty;
+    }).map((subtopic) {
+      return {
+        'name': subtopic,
+        'status': 'incomplete',
+      };
+    }).toList();
 
-    // Update subtopic status in Firestore
-    final subtopics = _subtopics[topic] ?? [];
-    final subtopicIndex = subtopics.indexWhere((s) => s['name'] == subtopic);
-    if (subtopicIndex != -1) {
-      subtopics[subtopicIndex]['status'] = 'complete';
-    }
-
-    // Update progress in Firestore
-    await firestore
-        .collection('users')
-        .doc(userId)
-        .collection('learningPath')
-        .doc(topic)
-        .update({
-      'subtopics': subtopics,
-      'completedSubtopics': subtopics
-          .where((subtopic) => subtopic['status'] == 'complete')
-          .length,
-      'progressPercentage': (subtopics
-                  .where((subtopic) => subtopic['status'] == 'complete')
-                  .length /
-              subtopics.length) *
-          100,
-    });
-
-    // Move to next topic (highlight next topic)
-    final nextTopicIndex =
-        _priorities.indexWhere((t) => t['topic'] == topic) + 1;
-    if (nextTopicIndex < _priorities.length) {
-      setState(() {
-        _currentHighlightedTopic = _priorities[nextTopicIndex]['topic'];
-      });
-    }
+    print('Parsed subtopics: $subtopics'); // Debugging print statement
+    return subtopics;
   }
 
   @override
@@ -210,10 +236,26 @@ class _LearningPathPageState extends State<LearningPathPage> {
       return Scaffold(
         appBar: AppBar(title: const Text('Learning Path')),
         body: Center(
-          child: Text(
-            _errorMessage,
-            style: const TextStyle(color: Colors.red, fontSize: 16),
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _errorMessage,
+                style: const TextStyle(color: Colors.red, fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const QuizApp(),
+                    ),
+                  );
+                },
+                child: const Text('Take Initial Assessment'),
+              ),
+            ],
           ),
         ),
       );
@@ -231,62 +273,22 @@ class _LearningPathPageState extends State<LearningPathPage> {
             final priority = _priorities[index]['priority'];
             final subtopics = _subtopics[topic] ?? [];
 
-            // Calculate progress percentage
-            final totalSubtopics = subtopics.length;
-            final completedSubtopics = subtopics
-                .where((subtopic) => subtopic['status'] == 'complete')
-                .length;
-            final progressPercentage = totalSubtopics > 0
-                ? (completedSubtopics / totalSubtopics) * 100
-                : 0;
+            if (subtopics.isEmpty) {
+              return const SizedBox.shrink();
+            }
 
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8.0),
-              color: _currentHighlightedTopic == topic
-                  ? Colors.blue.shade100
-                  : null,
               child: ExpansionTile(
-                title: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      topic,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    Text('${progressPercentage.toStringAsFixed(0)}% Complete'),
-                  ],
-                ),
+                title: Text(topic),
                 subtitle: Text(
                     'Score: $score, Priority: ${priority.toStringAsFixed(2)}'),
                 children: subtopics.map((subtopic) {
-                  final name = subtopic['name'];
-                  final status = subtopic['status'];
-                  final isQuiz = name.startsWith('Quiz');
-
                   return ListTile(
-                    title: Text(name),
-                    subtitle: Text('Status: $status'),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => isQuiz
-                              ? QuizContentPage(
-                                  topic: topic,
-                                  onQuizFinished: () {
-                                    _onSubtopicFinished(topic, name);
-                                  },
-                                )
-                              : SubtopicContentPage(
-                                  subtopic: name,
-                                  onSubtopicFinished: (subtopicName) {
-                                    _onSubtopicFinished(topic, subtopicName);
-                                  },
-                                ),
-                        ),
-                      );
-                    },
+                    title: Text(subtopic['name']),
+                    tileColor: subtopic['status'] == 'complete'
+                        ? Colors.grey[300]
+                        : null,
                   );
                 }).toList(),
               ),
