@@ -3,6 +3,8 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'initial.dart'; // Import your initial assessment page
+import 'content.dart'; // Import the SubtopicContentPage
+import 'quizcontent.dart'; // Import the ChapterQuiz page
 
 class LearningPathPage extends StatefulWidget {
   final Map<String, int>? topicScores;
@@ -292,14 +294,57 @@ class _LearningPathPageState extends State<LearningPathPage> {
                 title: Text(topic),
                 subtitle: Text(
                     'Score: $score, Priority: ${priority.toStringAsFixed(2)}'),
-                children: subtopics.map((subtopic) {
-                  return ListTile(
-                    title: Text(subtopic['name']),
-                    tileColor: subtopic['status'] == 'complete'
-                        ? Colors.grey[300]
-                        : null,
-                  );
-                }).toList(),
+                children: [
+                  ...subtopics.map((subtopic) {
+                    return ListTile(
+                      title: Text(subtopic['name']),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SubtopicContentPage(
+                              topic: topic, // Pass the topic
+                              subtopic: subtopic['name'],
+                              userId:
+                                  FirebaseAuth.instance.currentUser?.uid ?? '',
+                              onSubtopicFinished: () {
+                                // Handle subtopic completion
+                                setState(() {
+                                  subtopic['status'] = 'complete';
+                                });
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                      tileColor: subtopic['status'] == 'complete'
+                          ? Colors.grey[300]
+                          : null,
+                    );
+                  }).toList(),
+                  ListTile(
+                    title: const Text('Quiz'),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChapterQuiz(
+                            topic: topic, // Pass the topic
+                            userId:
+                                FirebaseAuth.instance.currentUser?.uid ?? '',
+                            onQuizFinished: () {
+                              // Handle quiz completion
+                              setState(() {
+                                // Update the progress based on quiz result
+                              });
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                    tileColor: Colors.blue[50],
+                  ),
+                ],
               ),
             );
           },

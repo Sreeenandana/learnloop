@@ -1,16 +1,21 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'dart:convert';
 
 class SubtopicContentPage extends StatelessWidget {
+  final String topic;
   final String subtopic;
-  final Function(String)
-      onSubtopicFinished; // Callback for when the subtopic is finished
+  final VoidCallback onSubtopicFinished;
+  final String
+      userId; // Assuming you have a userId to identify the user in Firestore
 
   SubtopicContentPage({
     super.key,
+    required this.topic,
     required this.subtopic,
-    required this.onSubtopicFinished, // Accept the callback function
+    required this.onSubtopicFinished,
+    required this.userId, // Pass the userId
   });
 
   // Regex patterns for bold, italic, code blocks, and bullet points
@@ -68,8 +73,9 @@ class SubtopicContentPage extends StatelessWidget {
         text: match.group(1), // Code content inside triple backticks
         style: const TextStyle(
           fontFamily: 'monospace',
-          backgroundColor: Color.fromARGB(
-              255, 139, 114, 114), // Light background for code block
+          backgroundColor:
+              Color.fromARGB(255, 44, 4, 4), // Light background for code block
+          color: Colors.black, // Set color to black for better visibility
         ),
       ));
       lastEnd = match.end;
@@ -86,7 +92,10 @@ class SubtopicContentPage extends StatelessWidget {
       finalTextSpans.addAll(_processTextStyles(span.text ?? ''));
     }
 
-    return TextSpan(children: finalTextSpans);
+    return TextSpan(
+        children: finalTextSpans,
+        style:
+            TextStyle(color: Colors.black)); // Set default text color to black
   }
 
   // Function to process bold, italic text, and bullet points
@@ -113,17 +122,24 @@ class SubtopicContentPage extends StatelessWidget {
       if (regexBold.hasMatch(match.group(0)!)) {
         resultSpans.add(TextSpan(
           text: match.group(1),
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.black, // Ensure bold text is visible
+          ),
         ));
       } else if (regexItalics.hasMatch(match.group(0)!)) {
         resultSpans.add(TextSpan(
           text: match.group(1),
-          style: const TextStyle(fontStyle: FontStyle.italic),
+          style: const TextStyle(
+            fontStyle: FontStyle.italic,
+            color: Colors.black, // Ensure italic text is visible
+          ),
         ));
       } else if (regexBullet.hasMatch(match.group(0)!)) {
         resultSpans.add(TextSpan(
           text: "\u2022 ${match.group(1)?.trim()}\n",
-          style: const TextStyle(),
+          style: const TextStyle(
+              color: Colors.black), // Ensure bullet points are visible
         ));
       }
 
@@ -136,6 +152,27 @@ class SubtopicContentPage extends StatelessWidget {
     }
 
     return resultSpans;
+  }
+
+  // Update subtopic status in Firestore
+  Future<void> _updateSubtopicStatus(String topic, String subtopic) async {
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('topics')
+          .doc(topic)
+          .collection('subtopics')
+          .doc(subtopic);
+
+      await docRef.update({
+        'status': 'finished', // Mark the subtopic as finished
+      });
+
+      print("Subtopic status updated to 'finished'");
+    } catch (e) {
+      print("Error updating subtopic status: $e");
+    }
   }
 
   @override
@@ -172,9 +209,15 @@ class SubtopicContentPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
+                      // Mark the subtopic as finished in Firestore
+                      await _updateSubtopicStatus(topic, subtopic);
+
                       // Mark the subtopic as finished and call the callback to move to the next subtopic
-                      onSubtopicFinished(subtopic);
+                      onSubtopicFinished();
+
+                      // Optionally, navigate to the next subtopic here
+                      // Navigator.push(context, ...);
                     },
                     child: const Text('Mark as Finished'),
                   ),

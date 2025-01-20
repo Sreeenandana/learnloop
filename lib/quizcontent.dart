@@ -3,15 +3,18 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home.dart';
+import 'path.dart'; // Import your LearningPathPage to navigate back
 
 class ChapterQuiz extends StatefulWidget {
   final String topic;
   final VoidCallback onQuizFinished;
+  final String userId; // Pass userId to the constructor
 
   const ChapterQuiz({
     super.key,
     required this.topic,
     required this.onQuizFinished,
+    required this.userId, // Receive userId as parameter
   });
 
   @override
@@ -167,7 +170,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
   Future<void> _finishQuiz() async {
     widget.onQuizFinished();
 
-    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown_user';
+    final userId = widget.userId; // Use the passed userId
     final firestore = FirebaseFirestore.instance;
 
     try {
@@ -175,26 +178,40 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       await firestore.collection('users').doc(userId).set(
         {
           'quizScores': FieldValue.arrayUnion([
+            // Store in the main user document
             {
               'topic': widget.topic,
               'score': _score,
               'totalQuestions': _questions.length,
-              'timestamp': FieldValue.serverTimestamp(),
+              //'timestamp': FieldValue.serverTimestamp(),
             }
-          ])
+          ]),
         },
         SetOptions(merge: true), // Use merge to avoid overwriting other data
       );
 
-      print("Quiz score stored successfully.");
+      // Mark the quiz as completed in learningPath document
+      await firestore
+          .collection('users')
+          .doc(userId)
+          .collection('learningPath')
+          .doc(widget.topic)
+          .update({
+        'completed': true, // Mark as completed
+        //'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      print("Quiz score stored and marked as completed.");
     } catch (e) {
       print("Error storing quiz score: $e");
     }
 
-    // Optionally, navigate back to the home page or another screen
+    // Optionally, navigate back to the LearningPathPage
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => HomePage()),
+      MaterialPageRoute(
+          builder: (context) =>
+              LearningPathPage()), // Pass userId back to the LearningPathPage
     );
   }
 
