@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:convert';
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:learnloop/path.dart';
-import 'package:learnloop/home.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'path.dart'; // Assuming you have a learning path class in 'path.dart'
+import 'home.dart'; // Assuming you have a home page in 'home.dart'
 
 class QuizApp extends StatelessWidget {
   const QuizApp({super.key});
@@ -102,36 +101,135 @@ class _QuizPageState extends State<QuizPage> {
   int _score = 0;
   bool _isLoading = true;
   final Map<String, int> _topicScores = {};
+  final String _apiKey =
+      'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44'; // Replace with your actual API key
 
   @override
   void initState() {
     super.initState();
-    _fetchQuestions();
+    _fetchQuestions(); // Fetch questions when the page is initialized
   }
 
   Future<void> _fetchQuestions() async {
-    final url = Uri.parse(
-        'http://127.0.0.1:5000/generate?level=${widget.level}'); // Replace with your Flask server URL
     try {
-      final response = await http.get(url);
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+      // Initialize the Google Generative AI SDK with the API key and model name
+      final model = GenerativeModel(
+        model: 'gemini-1.5-flash', // Replace with your preferred model
+        apiKey: _apiKey,
+      );
+
+      // Generate the prompt based on the selected level
+      final prompt = _generatePromptForLevel(widget.level);
+      final content = [Content.text(prompt)];
+
+      // Generate content using the AI model
+      final response = await model.generateContent(content);
+
+      if (response.text != null) {
+        print('API Response: ${response.text}'); // Log the raw response
         setState(() {
-          _questions = data['mcqs'];
+          _questions =
+              _parseQuestions(response.text!); // Parse questions from response
           _isLoading = false;
         });
       } else {
-        _showError('Failed to load questions: ${response.body}');
+        setState(() {
+          _isLoading = false;
+          _questions = [];
+        });
+        _showError('No content generated from API.');
       }
     } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _questions = [];
+      });
       _showError('Error fetching questions: $e');
     }
   }
 
+  String _generatePromptForLevel(String level) {
+    switch (level) {
+      case 'beginner':
+        return "Generate 20 beginner-level Java multiple choice questions (MCQs) about variables, loops, and basic syntax. "
+            "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
+            "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. "
+            "Do not provide any other message or use any special characters unless necessary.";
+
+      case 'intermediate':
+        return "Generate 20 intermediate-level Java multiple choice questions (MCQs) about functions, classes, and data structures. "
+            "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
+            "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. "
+            "Do not provide any other message or use any special characters unless necessary.";
+
+      case 'advanced':
+        return "Generate 20 advanced-level Java multiple choice questions (MCQs) about algorithms, data science, and optimization. "
+            "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
+            "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. "
+            "Do not provide any other message or use any special characters unless necessary.";
+
+      default:
+        return '';
+    }
+  }
+
+  List<dynamic> _parseQuestions(String responseText) {
+    final List<dynamic> parsedQuestions = [];
+    final lines = responseText.split('\n'); // Split the response into lines
+    print('Response lines: $lines'); // Log the lines for debugging
+    Map<String, String> currentQuestion =
+        {}; // Temporary storage for a question's parts
+
+    for (var line in lines) {
+      line = line.trim(); // Remove extra whitespace
+      if (line.startsWith('qstn:')) {
+        // Start of a new question; process the previous question if it's complete
+        if (currentQuestion.isNotEmpty) {
+          if (_isValidQuestion(currentQuestion)) {
+            parsedQuestions.add(_buildQuestionMap(currentQuestion));
+          }
+          currentQuestion.clear(); // Clear for the next question
+        }
+        currentQuestion['qstn'] =
+            line.substring(5).trim(); // Extract question text
+      } else if (line.startsWith('opt:')) {
+        currentQuestion['opt'] = line.substring(4).trim(); // Extract options
+      } else if (line.startsWith('ans:')) {
+        currentQuestion['ans'] = line.substring(4).trim(); // Extract answer
+      } else if (line.startsWith('top:')) {
+        currentQuestion['top'] = line.substring(4).trim(); // Extract topic
+      }
+    }
+
+    // Process the last question in the response
+    if (_isValidQuestion(currentQuestion)) {
+      parsedQuestions.add(_buildQuestionMap(currentQuestion));
+    }
+
+    print(
+        'Parsed ${parsedQuestions.length} questions'); // Log number of parsed questions
+    return parsedQuestions;
+  }
+
+  bool _isValidQuestion(Map<String, String> question) {
+    print('Validating question: $question'); // Log the question being validated
+    return question.containsKey('qstn') &&
+        question.containsKey('opt') &&
+        question.containsKey('ans') &&
+        question.containsKey('top');
+  }
+
+  Map<String, dynamic> _buildQuestionMap(Map<String, String> question) {
+    return {
+      'question': question['qstn'] ?? '',
+      'options':
+          (question['opt'] ?? '').split(',').map((opt) => opt.trim()).toList(),
+      'correct_answer': question['ans'] ?? '',
+      'topic': question['top'] ?? '',
+    };
+  }
+
   void _showError(String message) {
-    setState(() {
-      _isLoading = false;
-    });
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -150,13 +248,15 @@ class _QuizPageState extends State<QuizPage> {
   void _submitAnswer(String selectedAnswer) {
     final question = _questions[_currentQuestionIndex];
     final correctAnswer = question['correct_answer'];
-    final topic = question['topic'];
+    final topic = question['topic'] ??
+        'General'; // Default to 'General' if topic is missing
 
     if (correctAnswer == null || topic == null) {
       _showError('Error: Missing data for question.');
       return;
     }
 
+    // Ensure the topic exists in the scores map
     if (!_topicScores.containsKey(topic)) {
       _topicScores[topic] = 0;
     }
@@ -165,19 +265,19 @@ class _QuizPageState extends State<QuizPage> {
       _topicScores[topic] = _topicScores[topic]! + 1;
       _score++;
     }
-
     if (_currentQuestionIndex < _questions.length - 1) {
       setState(() {
         _currentQuestionIndex++;
       });
     } else {
-      _showResults();
+      _goToHomePage(); // Redirect to home page after quiz
     }
   }
 
-  void _showResults() {
+  void _goToHomePage() {
     final userId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown_user';
 
+    // Pass topicScores to the learning path and go to home page
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(

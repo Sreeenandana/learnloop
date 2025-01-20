@@ -1,79 +1,161 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'home.dart';
+import 'path.dart'; // Import your LearningPathPage to navigate back
 
-class QuizContentPage extends StatefulWidget {
+class ChapterQuiz extends StatefulWidget {
   final String topic;
-  const QuizContentPage({super.key, required this.topic});
+  final VoidCallback onQuizFinished;
+  final String userId; // Pass userId to the constructor
+
+  const ChapterQuiz({
+    super.key,
+    required this.topic,
+    required this.onQuizFinished,
+    required this.userId, // Receive userId as parameter
+  });
 
   @override
-  State<QuizContentPage> createState() => _QuizContentPageState();
+  State<ChapterQuiz> createState() => _ChapterQuizState();
 }
 
-class _QuizContentPageState extends State<QuizContentPage> {
+class _ChapterQuizState extends State<ChapterQuiz> {
   List<dynamic> _questions = [];
   int _currentQuestionIndex = 0;
   int _score = 0;
   bool _isLoading = true;
-  bool _hasError = false;
-
-  String? _userId;
+  final Map<String, int> _topicScores = {};
+  final String _apiKey =
+      'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44'; // Replace with your actual API key
 
   @override
   void initState() {
     super.initState();
-    _getUserId();
     _fetchQuestions();
-  }
-
-  Future<void> _getUserId() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        setState(() {
-          _userId = user.uid;
-        });
-      }
-    } catch (_) {
-      setState(() {
-        _hasError = true;
-      });
-    }
   }
 
   Future<void> _fetchQuestions() async {
     try {
-      final response = await http.get(
-        Uri.parse('http://127.0.0.1:5000/questions?topic=${widget.topic}'),
+      final model = GenerativeModel(
+        model: 'gemini-1.5-flash',
+        apiKey: _apiKey,
       );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+      final prompt = _generatePromptForQuiz(widget.topic);
+      final content = [Content.text(prompt)];
+
+      final response = await model.generateContent(content);
+
+      if (response.text != null) {
         setState(() {
-          _questions = data['mcqs'];
+          _questions = _parseQuestions(response.text!);
           _isLoading = false;
         });
       } else {
         setState(() {
-          _hasError = true;
+          _isLoading = false;
+          _questions = [];
         });
       }
-    } catch (_) {
+    } catch (e) {
       setState(() {
-        _hasError = true;
+        _isLoading = false;
+        _questions = [];
       });
+      _showError('Error fetching questions: $e');
     }
   }
 
+  String _generatePromptForQuiz(String topic) {
+    return "Generate 10 multiple choice questions (MCQs) about Java, on topic $topic. "
+        "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
+        "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. "
+        "Do not provide any other message or use any special characters unless necessary.";
+  }
+
+  List<dynamic> _parseQuestions(String responseText) {
+    final List<dynamic> parsedQuestions = [];
+    final lines = responseText.split('\n');
+    Map<String, String> currentQuestion = {};
+
+    for (var line in lines) {
+      line = line.trim();
+      if (line.startsWith('qstn:')) {
+        if (currentQuestion.isNotEmpty) {
+          if (_isValidQuestion(currentQuestion)) {
+            parsedQuestions.add(_buildQuestionMap(currentQuestion));
+          }
+          currentQuestion.clear();
+        }
+        currentQuestion['qstn'] = line.substring(5).trim();
+      } else if (line.startsWith('opt:')) {
+        currentQuestion['opt'] = line.substring(4).trim();
+      } else if (line.startsWith('ans:')) {
+        currentQuestion['ans'] = line.substring(4).trim();
+      } else if (line.startsWith('top:')) {
+        currentQuestion['top'] = line.substring(4).trim();
+      }
+    }
+
+    if (_isValidQuestion(currentQuestion)) {
+      parsedQuestions.add(_buildQuestionMap(currentQuestion));
+    }
+
+    return parsedQuestions;
+  }
+
+  bool _isValidQuestion(Map<String, String> question) {
+    return question.containsKey('qstn') &&
+        question.containsKey('opt') &&
+        question.containsKey('ans') &&
+        question.containsKey('top');
+  }
+
+  Map<String, dynamic> _buildQuestionMap(Map<String, String> question) {
+    return {
+      'question': question['qstn'] ?? '',
+      'options':
+          (question['opt'] ?? '').split(',').map((opt) => opt.trim()).toList(),
+      'correct_answer': question['ans'] ?? '',
+      'topic': question['top'] ?? '',
+    };
+  }
+
+  void _showError(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _submitAnswer(String selectedAnswer) {
-    final correctAnswer = _questions[_currentQuestionIndex]['correct_answer'];
+    final question = _questions[_currentQuestionIndex];
+    final correctAnswer = question['correct_answer'];
+    final topic = question['topic'] ?? 'General';
+
+    if (correctAnswer == null) {
+      _showError('Error: Missing data for correct_answer.');
+      return;
+    }
+
+    if (!_topicScores.containsKey(topic)) {
+      _topicScores[topic] = 0;
+    }
 
     if (selectedAnswer == correctAnswer) {
-      setState(() {
-        _score++;
-      });
+      _topicScores[topic] = _topicScores[topic]! + 1;
+      _score++;
     }
 
     if (_currentQuestionIndex < _questions.length - 1) {
@@ -81,135 +163,93 @@ class _QuizContentPageState extends State<QuizContentPage> {
         _currentQuestionIndex++;
       });
     } else {
-      _submitResults();
+      _finishQuiz();
     }
   }
 
-  Future<void> _submitResults() async {
-    if (_userId == null) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Error'),
-            content:
-                const Text('Failed to identify user. Please log in again.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-      return;
-    }
+  Future<void> _finishQuiz() async {
+    widget.onQuizFinished();
+
+    final userId = widget.userId; // Use the passed userId
+    final firestore = FirebaseFirestore.instance;
 
     try {
-      await FirebaseFirestore.instance.collection('quiz_results').add({
-        'userId': _userId,
-        'topic': widget.topic,
-        'score': _score,
-        'totalQuestions': _questions.length,
-        'completedAt': Timestamp.now(),
+      // Store the score in Firestore under the user's document
+      await firestore.collection('users').doc(userId).set(
+        {
+          'quizScores': FieldValue.arrayUnion([
+            // Store in the main user document
+            {
+              'topic': widget.topic,
+              'score': _score,
+              'totalQuestions': _questions.length,
+              //'timestamp': FieldValue.serverTimestamp(),
+            }
+          ]),
+        },
+        SetOptions(merge: true), // Use merge to avoid overwriting other data
+      );
+
+      // Mark the quiz as completed in learningPath document
+      await firestore
+          .collection('users')
+          .doc(userId)
+          .collection('learningPath')
+          .doc(widget.topic)
+          .update({
+        'completed': true, // Mark as completed
+        //'timestamp': FieldValue.serverTimestamp(),
       });
 
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Quiz Completed'),
-            content: Text('You scored $_score out of ${_questions.length}!'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // Close dialog
-                  Navigator.pop(context); // Go back to the previous page
-                },
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Error'),
-            content: const Text('Failed to submit results. Please try again.'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // Close dialog
-                },
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
+      print("Quiz score stored and marked as completed.");
+    } catch (e) {
+      print("Error storing quiz score: $e");
     }
+
+    // Optionally, navigate back to the LearningPathPage
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+          builder: (context) =>
+              LearningPathPage()), // Pass userId back to the LearningPathPage
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading || _userId == null) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
-    if (_hasError) {
+    if (_isLoading) {
       return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('Failed to load questions. Please try again later.'),
-              ElevatedButton(
-                onPressed: _fetchQuestions,
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
+        appBar: AppBar(title: const Text('Quiz')),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    final currentQuestion = _questions[_currentQuestionIndex];
-
+    final question = _questions[_currentQuestionIndex];
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Quiz: ${widget.topic}'),
-      ),
+      appBar: AppBar(title: Text('Question ${_currentQuestionIndex + 1}')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Question ${_currentQuestionIndex + 1}/${_questions.length}',
+              question['question'],
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 16),
-            Text(
-              currentQuestion['question'],
-              style: const TextStyle(fontSize: 16),
+            const SizedBox(height: 20),
+            ...List.generate(
+              question['options'].length,
+              (index) {
+                final option = question['options'][index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10.0),
+                  child: ElevatedButton(
+                    onPressed: () => _submitAnswer(option),
+                    child: Text(option),
+                  ),
+                );
+              },
             ),
-            const SizedBox(height: 16),
-            ...currentQuestion['options'].map<Widget>((option) {
-              final displayOption =
-                  option.startsWith('opt:') ? option.substring(4) : option;
-              return ElevatedButton(
-                onPressed: () => _submitAnswer(displayOption),
-                child: Text(displayOption),
-              );
-            }).toList(),
           ],
         ),
       ),

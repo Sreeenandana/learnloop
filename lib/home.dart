@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'path.dart'; // Import your LearningPathPage here
+import 'path.dart'; // Assuming LearningPathPage is in this file
 import 'login.dart'; // Import the LoginPage for redirection after logout
 
 class HomePage extends StatefulWidget {
@@ -37,19 +37,45 @@ class _HomePageState extends State<HomePage> {
     }
 
     try {
-      // Fetch user data from Firestore using the userId
-      final userDoc = await firestore.collection('users').doc(userId).get();
+      // Fetch the initial assessment data directly from the user's document
+      final initialAssessmentDocumentSnapshot = await firestore
+          .collection('users')
+          .doc(userId)
+          .get(); // Fetching the user document directly
 
-      if (userDoc.exists) {
-        // Process the user data (e.g., topicScores) here
-        final data = userDoc.data();
-        setState(() {
-          topicScores = Map<String, int>.from(data?['marks'] ?? {});
-          isLoading = false;
-        });
-        print('User topic scores: $topicScores');
+      final data = initialAssessmentDocumentSnapshot.data();
+      print("before if");
+      print(data);
+      if (data != null && data.containsKey('initialAssessment')) {
+        // Process the initial assessment data
+        final marks = data['initialAssessment']['marks']
+            as Map<String, dynamic>?; // Retrieve 'initialAssessment' map
+        print(marks);
+        if (marks != null) {
+          Map<String, int> scores = {};
+          print("print score");
+          // Convert the marks map into topicScores
+          marks.forEach((topic, score) {
+            if (topic.isNotEmpty && score is int) {
+              scores[topic] = score;
+              print(scores);
+            }
+          });
+
+          print('Fetched scores: $scores'); // Debug log for fetched scores
+
+          setState(() {
+            topicScores = scores;
+            isLoading = false;
+          });
+        } else {
+          print('No initial assessment data found for the user.');
+          setState(() {
+            isLoading = false;
+          });
+        }
       } else {
-        print('No data found for the user.');
+        print('No initial assessment field found in the user document.');
         setState(() {
           isLoading = false;
         });
@@ -96,6 +122,7 @@ class _HomePageState extends State<HomePage> {
                     )
                   : ElevatedButton(
                       onPressed: () {
+                        // Pass topicScores to LearningPathPage
                         Navigator.push(
                           context,
                           MaterialPageRoute(
