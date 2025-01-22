@@ -2,26 +2,25 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'initial.dart'; // Import your initial assessment page
-import 'content.dart'; // Import the SubtopicContentPage
-import 'quizcontent.dart'; // Import the ChapterQuiz page
+import 'package:learnloop/content.dart';
+import 'initial.dart';
+import 'content.dart';
+import 'quizcontent.dart';
 
 class LearningPathPage extends StatefulWidget {
   final Map<String, int>? topicScores;
-  final String? highlightedTopic;
 
-  const LearningPathPage({super.key, this.topicScores, this.highlightedTopic});
+  const LearningPathPage({Key? key, this.topicScores}) : super(key: key);
 
   @override
-  State<LearningPathPage> createState() => _LearningPathPageState();
+  _LearningPathPageState createState() => _LearningPathPageState();
 }
 
 class _LearningPathPageState extends State<LearningPathPage> {
   bool _isLoading = true;
   String _errorMessage = '';
-  List<Map<String, dynamic>> _priorities = [];
+  List<String> _topics = [];
   final Map<String, List<Map<String, dynamic>>> _subtopics = {};
-  String? _currentHighlightedTopic;
 
   final _auth = FirebaseAuth.instance;
 
@@ -37,7 +36,7 @@ class _LearningPathPageState extends State<LearningPathPage> {
 
   Future<void> _loadUserLearningPath() async {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
-    final userId = FirebaseAuth.instance.currentUser?.uid;
+    final userId = _auth.currentUser?.uid;
 
     if (userId == null) {
       setState(() {
@@ -47,82 +46,82 @@ class _LearningPathPageState extends State<LearningPathPage> {
       return;
     }
 
-    Map<String, int> topicScores = widget.topicScores ?? {};
-    print('Received topicScores: $topicScores'); // Debugging print statement
+    try {
+      final learningPathSnapshot = await firestore
+          .collection('users')
+          .doc(userId)
+          .collection('learningPath')
+          .get();
 
-    // Filter out the totalscore entry (always filter regardless of source)
-    topicScores.remove('totalscore');
+      if (learningPathSnapshot.docs.isNotEmpty) {
+        _loadExistingLearningPath(learningPathSnapshot);
+        return;
+      }
 
-    if (topicScores.isEmpty) {
-      try {
-        final userDoc = await firestore.collection('users').doc(userId).get();
-        final data = userDoc.data();
-
-        print('Fetched user data: $data'); // Debugging print statement
-
-        if (data == null || !data.containsKey('initialAssessment')) {
-          setState(() {
-            _errorMessage =
-                'Initial assessment data is missing. Please complete the initial assessment.';
-            _isLoading = false;
-          });
-          return;
-        }
-
-        final initialAssessment = data['initialAssessment'];
-        topicScores = Map<String, int>.from(initialAssessment['marks'] ?? {});
-
-        if (topicScores.isEmpty) {
-          setState(() {
-            _errorMessage = 'No topic scores found in the initial assessment.';
-            _isLoading = false;
-          });
-          return;
-        }
-
-        // No need to filter totalscore again as it has already been removed
-        print(
-            'Filtered topicScores: $topicScores'); // Debugging print statement
-      } catch (e) {
+      final userDoc = await firestore.collection('users').doc(userId).get();
+      final data = userDoc.data();
+      if (data == null || !data.containsKey('marks')) {
         setState(() {
-          _errorMessage = 'Error fetching topic scores: $e';
+          _errorMessage =
+              'No learning path or initial assessment data found. Please complete the initial assessment.';
           _isLoading = false;
         });
         return;
       }
+
+      final Map<String, int> topicScores = Map<String, int>.from(data['marks']);
+      if (topicScores.isEmpty) {
+        setState(() {
+          _errorMessage = 'No topic scores found in the initial assessment.';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      _generateLearningPath(topicScores);
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error loading learning path: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _loadExistingLearningPath(QuerySnapshot learningPathSnapshot) {
+    final List<String> topics = [];
+    final Map<String, List<Map<String, dynamic>>> subtopics = {};
+
+    for (var doc in learningPathSnapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      topics.add(doc.id);
+      subtopics[doc.id] = List<Map<String, dynamic>>.from(data['subtopics']);
     }
 
+    setState(() {
+      _topics = topics;
+      _subtopics.addAll(subtopics);
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _generateLearningPath(Map<String, int> topicScores) async {
     try {
       final maxScore = topicScores.values.isNotEmpty
           ? topicScores.values.reduce((a, b) => a > b ? a : b)
           : 1;
 
-      List<Map<String, dynamic>> priorities = topicScores.entries.map((entry) {
+      for (var entry in topicScores.entries) {
         final normalizedScore = entry.value / maxScore;
         final priority = 1 - normalizedScore;
-        return {
-          'topic': entry.key,
-          'priority': priority,
-          'score': entry.value,
-        };
-      }).toList();
+        final topic = entry.key;
 
-      print(
-          'Priorities after assessment: $priorities'); // Debugging print statement
-
-      for (var priority in priorities) {
-        final topic = priority['topic'];
-        await _generateAndLoadSubtopics(topic);
+        await _generateAndLoadSubtopics(topic, priority, entry.value);
       }
 
-      if (mounted) {
-        setState(() {
-          _priorities = priorities;
-          _isLoading = false;
-          _currentHighlightedTopic =
-              widget.highlightedTopic ?? _priorities.first['topic'];
-        });
-      }
+      setState(() {
+        _topics = topicScores.keys.toList();
+        _isLoading = false;
+      });
     } catch (e) {
       setState(() {
         _errorMessage = 'Error generating learning path: $e';
@@ -131,9 +130,10 @@ class _LearningPathPageState extends State<LearningPathPage> {
     }
   }
 
-  Future<void> _generateAndLoadSubtopics(String topic) async {
+  Future<void> _generateAndLoadSubtopics(
+      String topic, double priority, int score) async {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
-    final userId = FirebaseAuth.instance.currentUser?.uid;
+    final userId = _auth.currentUser?.uid;
 
     if (userId == null) {
       setState(() {
@@ -143,23 +143,14 @@ class _LearningPathPageState extends State<LearningPathPage> {
     }
 
     if (_subtopics.containsKey(topic) && _subtopics[topic]!.isNotEmpty) {
-      return; // Subtopics already loaded
+      return;
     }
 
     try {
-      final topicPriorityEntry = _priorities.firstWhere(
-        (priority) => priority['topic'] == topic,
-        orElse: () => {'topic': topic, 'priority': 1.0},
-      );
-
-      final topicPriority = topicPriorityEntry['priority'];
-      print(
-          'Generating subtopics for topic: $topic with priority: $topicPriority'); // Debugging print statement
-
-      final prompt = _generateSubtopicPrompt(topic, topicPriority);
+      final prompt = _generateSubtopicPrompt(topic, priority);
 
       final model = GenerativeModel(
-        model: 'gemini-1.5-flash', // Replace with your preferred model
+        model: 'gemini-1.5-flash',
         apiKey: _apiKey,
       );
 
@@ -177,8 +168,6 @@ class _LearningPathPageState extends State<LearningPathPage> {
           return;
         }
 
-        final quizTitle = 'Quiz for $topic';
-
         setState(() {
           _subtopics[topic] = subtopics;
         });
@@ -188,17 +177,17 @@ class _LearningPathPageState extends State<LearningPathPage> {
             .doc(userId)
             .collection('learningPath')
             .doc(topic)
-            .set({
-          'priority': topicPriority,
-          'subtopics': subtopics,
-          'quizTitle': quizTitle,
-          'totalSubtopics': subtopics.length,
-          'completedSubtopics': 0,
-          'progressPercentage': 0,
-        });
-
-        print(
-            'Subtopics generated and saved for topic: $topic'); // Debugging print statement
+            .set(
+          {
+            'priority': priority,
+            'score': score,
+            'subtopics': subtopics,
+            'totalSubtopics': subtopics.length,
+            'completedSubtopics': 0,
+            'progressPercentage': 0,
+          },
+          SetOptions(merge: true),
+        );
       } else {
         setState(() {
           _errorMessage =
@@ -215,8 +204,8 @@ class _LearningPathPageState extends State<LearningPathPage> {
   String _generateSubtopicPrompt(String topic, double priority) {
     return "Generate 5 subtopics for the topic $topic based on its priority $priority (0: high priority, 1: low priority). "
         "For high priority topics, assume the user is a beginner, and for low priority, assume the user has advanced knowledge. "
-        "List the subtopics as a plain text, each separated by a newline. "
-        "After the last subtopic, in the next line, include a title for quiz. It should always start with 'Quiz:' "
+        "List the subtopics as plain text, each separated by a newline. "
+        "After the last subtopic, in the next line, include a title for the quiz. It should always start with 'Quiz:' "
         "Do not provide any other message or use special characters unless necessary.";
   }
 
@@ -230,7 +219,6 @@ class _LearningPathPageState extends State<LearningPathPage> {
       };
     }).toList();
 
-    print('Parsed subtopics: $subtopics'); // Debugging print statement
     return subtopics;
   }
 
@@ -277,38 +265,31 @@ class _LearningPathPageState extends State<LearningPathPage> {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ListView.builder(
-          itemCount: _priorities.length,
+          itemCount: _topics.length,
           itemBuilder: (context, index) {
-            final topic = _priorities[index]['topic'];
-            final score = _priorities[index]['score'];
-            final priority = _priorities[index]['priority'];
+            final topic = _topics[index];
             final subtopics = _subtopics[topic] ?? [];
-
-            if (subtopics.isEmpty) {
-              return const SizedBox.shrink();
-            }
 
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8.0),
               child: ExpansionTile(
                 title: Text(topic),
-                subtitle: Text(
-                    'Score: $score, Priority: ${priority.toStringAsFixed(2)}'),
                 children: [
                   ...subtopics.map((subtopic) {
                     return ListTile(
                       title: Text(subtopic['name']),
+                      tileColor: subtopic['status'] == 'complete'
+                          ? Colors.grey[300]
+                          : null,
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => SubtopicContentPage(
-                              topic: topic, // Pass the topic
+                              topic: topic,
                               subtopic: subtopic['name'],
-                              userId:
-                                  FirebaseAuth.instance.currentUser?.uid ?? '',
+                              userId: _auth.currentUser!.uid,
                               onSubtopicFinished: () {
-                                // Handle subtopic completion
                                 setState(() {
                                   subtopic['status'] = 'complete';
                                 });
@@ -317,32 +298,27 @@ class _LearningPathPageState extends State<LearningPathPage> {
                           ),
                         );
                       },
-                      tileColor: subtopic['status'] == 'complete'
-                          ? Colors.grey[300]
-                          : null,
                     );
                   }).toList(),
                   ListTile(
                     title: const Text('Quiz'),
+                    tileColor: Colors.blue[50],
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => ChapterQuiz(
-                            topic: topic, // Pass the topic
-                            userId:
-                                FirebaseAuth.instance.currentUser?.uid ?? '',
+                            userId: _auth.currentUser!.uid,
+                            topic: topic,
                             onQuizFinished: () {
-                              // Handle quiz completion
                               setState(() {
-                                // Update the progress based on quiz result
+                                print('Quiz for $topic completed!');
                               });
                             },
                           ),
                         ),
                       );
                     },
-                    tileColor: Colors.blue[50],
                   ),
                 ],
               ),

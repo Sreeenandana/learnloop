@@ -3,7 +3,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home.dart';
-import 'path.dart'; // Import your LearningPathPage to navigate back
+import 'path.dart';
 
 class ChapterQuiz extends StatefulWidget {
   final String topic;
@@ -71,7 +71,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
   String _generatePromptForQuiz(String topic) {
     return "Generate 10 multiple choice questions (MCQs) about Java, on topic $topic. "
         "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
-        "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. "
+        "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. give only 4 options."
         "Do not provide any other message or use any special characters unless necessary.";
   }
 
@@ -174,21 +174,23 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     final firestore = FirebaseFirestore.instance;
 
     try {
-      // Store the score in Firestore under the user's document
-      await firestore.collection('users').doc(userId).set(
-        {
-          'quizScores': FieldValue.arrayUnion([
-            // Store in the main user document
-            {
-              'topic': widget.topic,
-              'score': _score,
-              'totalQuestions': _questions.length,
-              //'timestamp': FieldValue.serverTimestamp(),
-            }
-          ]),
-        },
-        SetOptions(merge: true), // Use merge to avoid overwriting other data
-      );
+      // Store the score in Firestore under the user's document for the specific topic
+      await firestore
+          .collection('users')
+          .doc(userId)
+          .collection('chapterQuiz')
+          .doc(widget.topic) // Use the topic as the document ID
+          .set(
+              {
+            'topic': widget.topic,
+            'score': _score,
+            'totalQuestions': _questions.length,
+            'modificationTime':
+                FieldValue.serverTimestamp(), // Save modification time
+          },
+              SetOptions(
+                  merge:
+                      true)); // Use merge to update the document if it already exists
 
       // Mark the quiz as completed in learningPath document
       await firestore
@@ -211,7 +213,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       context,
       MaterialPageRoute(
           builder: (context) =>
-              LearningPathPage()), // Pass userId back to the LearningPathPage
+              const LearningPathPage()), // Pass userId back to the LearningPathPage
     );
   }
 

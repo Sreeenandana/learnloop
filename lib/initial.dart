@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'path.dart'; // Assuming you have a learning path class in 'path.dart'
-import 'home.dart'; // Assuming you have a home page in 'home.dart'
+import 'path.dart';
+import 'home.dart';
 
 class QuizApp extends StatelessWidget {
   const QuizApp({super.key});
@@ -126,7 +126,7 @@ class _QuizPageState extends State<QuizPage> {
       final response = await model.generateContent(content);
 
       if (response.text != null) {
-        print('API Response: ${response.text}'); // Log the raw response
+        // print('API Response: ${response.text}'); // Log the raw response
         setState(() {
           _questions =
               _parseQuestions(response.text!); // Parse questions from response
@@ -153,19 +153,19 @@ class _QuizPageState extends State<QuizPage> {
       case 'beginner':
         return "Generate 20 beginner-level Java multiple choice questions (MCQs) about variables, loops, and basic syntax. "
             "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
-            "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. "
+            "'ans:' for the correct answer, and 'top:' for the topic. give only 4 options. Separate each question set with a newline. "
             "Do not provide any other message or use any special characters unless necessary.";
 
       case 'intermediate':
         return "Generate 20 intermediate-level Java multiple choice questions (MCQs) about functions, classes, and data structures. "
             "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
-            "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. "
+            "'ans:' for the correct answer, and 'top:' for the topic. give only 4 options. Separate each question set with a newline. "
             "Do not provide any other message or use any special characters unless necessary.";
 
       case 'advanced':
         return "Generate 20 advanced-level Java multiple choice questions (MCQs) about algorithms, data science, and optimization. "
             "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
-            "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. "
+            "'ans:' for the correct answer, and 'top:' for the topic. give only 4 options. Separate each question set with a newline. "
             "Do not provide any other message or use any special characters unless necessary.";
 
       default:
@@ -176,7 +176,7 @@ class _QuizPageState extends State<QuizPage> {
   List<dynamic> _parseQuestions(String responseText) {
     final List<dynamic> parsedQuestions = [];
     final lines = responseText.split('\n'); // Split the response into lines
-    print('Response lines: $lines'); // Log the lines for debugging
+    // print('Response lines: $lines'); // Log the lines for debugging
     Map<String, String> currentQuestion =
         {}; // Temporary storage for a question's parts
 
@@ -206,8 +206,7 @@ class _QuizPageState extends State<QuizPage> {
       parsedQuestions.add(_buildQuestionMap(currentQuestion));
     }
 
-    print(
-        'Parsed ${parsedQuestions.length} questions'); // Log number of parsed questions
+    // print('Parsed ${parsedQuestions.length} questions'); // Log number of parsed questions
     return parsedQuestions;
   }
 
@@ -351,12 +350,15 @@ class ResultPage extends StatelessWidget {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
     try {
-      await firestore.collection('users').doc(userId).set({
-        'marks': topicScores,
-        'totalScore': score,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      await firestore.collection('users').doc(userId).set(
+        {
+          'marks': topicScores,
+          'totalScore': score,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
     } catch (e) {
       print("Error saving results: $e");
     }

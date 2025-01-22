@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
-import 'home.dart'; // Import your HomePage
-import 'login.dart'; // Import your LoginPage
-import 'splashscreen.dart'; // Import your sliding splash screen
+import 'home.dart';
+import 'login.dart';
+import 'splashscreen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
