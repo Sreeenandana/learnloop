@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class WeeklyLeaderboard extends StatelessWidget {
-  const WeeklyLeaderboard({Key? key}) : super(key: key); // Add const
+  const WeeklyLeaderboard({super.key}); // Add const
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Weekly Leaderboard'),
+        title: const Text('Weekly Leaderboard'),
         centerTitle: true,
       ),
       body: StreamBuilder<QuerySnapshot>(
@@ -18,11 +18,11 @@ class WeeklyLeaderboard extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Center(child: Text('No data available.'));
+            return const Center(child: Text('No data available.'));
           }
 
           final leaderboardData = snapshot.data!.docs;
