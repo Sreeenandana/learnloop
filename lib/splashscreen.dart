@@ -11,106 +11,129 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  final PageController _pageController = PageController();
   int _currentPage = 0;
+  bool _isLoggedIn = false;
+  final int _totalPages = 3;
 
   @override
   void initState() {
     super.initState();
-
-    // Automatically navigate after the last page
-    Future.delayed(const Duration(seconds: 12), _checkAuthState);
+    _checkAuthState();
   }
 
   void _checkAuthState() {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user != null) {
-      // If the user is logged in, navigate to HomePage
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomePage()),
-      );
+      // User is logged in
+      setState(() {
+        _isLoggedIn = true;
+      });
+      Future.delayed(const Duration(seconds: 3), () {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+      });
+    }
+  }
+
+  void _navigateToNextPage() {
+    if (_currentPage < (_isLoggedIn ? 0 : _totalPages - 1)) {
+      setState(() {
+        _currentPage++;
+      });
     } else {
-      // If the user is not logged in, navigate to LoginPage
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginPage()),
-      );
+      // Navigate to appropriate page after the last slide
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(
-          76, 175, 80, 1), // Customize the background color
+      backgroundColor: const Color.fromRGBO(76, 175, 80, 1),
       body: Stack(
         children: [
-          PageView(
-            controller: _pageController,
+          PageView.builder(
+            itemCount: _isLoggedIn ? 1 : _totalPages,
             onPageChanged: (int page) {
               setState(() {
                 _currentPage = page;
               });
             },
-            children: [
-              // Slide 1
-              buildPage(
-                title: 'Welcome to LearnLoop',
-                subtitle: 'The best platform to start your learning journey!',
-                icon: Icons.book_online,
-              ),
-              // Slide 2
-              buildPage(
-                title: 'Learn from the Best',
-                subtitle: 'Courses tailored to your needs and interests.',
-                icon: Icons.school,
-              ),
-              // Slide 3
-              buildPage(
-                title: 'Achieve Your Goals',
-                subtitle:
-                    'Track your progress and celebrate your achievements.',
-                icon: Icons.emoji_events,
-              ),
-            ],
+            controller: PageController(initialPage: _currentPage),
+            itemBuilder: (context, index) {
+              return buildPage(
+                title: index == 0
+                    ? 'Welcome to LearnLoop'
+                    : index == 1
+                        ? 'Learn from the Best'
+                        : 'Achieve Your Goals',
+                subtitle: index == 0
+                    ? 'The best platform to start your learning journey!'
+                    : index == 1
+                        ? 'Courses tailored to your needs and interests.'
+                        : 'Track your progress and celebrate your achievements.',
+                icon: index == 0
+                    ? Icons.book_online
+                    : index == 1
+                        ? Icons.school
+                        : Icons.emoji_events,
+              );
+            },
           ),
           // Indicator dots
           Positioned(
-            bottom: 30,
+            bottom: 60,
             left: 0,
             right: 0,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
-                3, // Number of pages
-                (index) => buildDot(index, _currentPage),
+                _isLoggedIn ? 1 : _totalPages,
+                (index) => buildDot(index),
               ),
             ),
           ),
-          // Skip button
-          if (_currentPage < 2)
-            Positioned(
-              top: 40,
-              right: 20,
-              child: TextButton(
-                onPressed: _checkAuthState,
-                child: const Text(
-                  'Skip',
-                  style: TextStyle(color: Colors.black),
+          // Next button
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: ElevatedButton(
+              onPressed: _navigateToNextPage,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
+              child: Text(_currentPage == (_isLoggedIn ? 0 : _totalPages - 1)
+                  ? 'Finish'
+                  : 'Next'),
             ),
+          ),
         ],
       ),
     );
   }
 
-  Widget buildPage(
-      {required String title,
-      required String subtitle,
-      required IconData icon}) {
+  Widget buildPage({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Column(
@@ -145,14 +168,14 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
-  Widget buildDot(int index, int currentPage) {
+  Widget buildDot(int index) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       margin: const EdgeInsets.symmetric(horizontal: 5),
       height: 10,
-      width: currentPage == index ? 20 : 10,
+      width: _currentPage == index ? 20 : 10,
       decoration: BoxDecoration(
-        color: currentPage == index ? Colors.black : Colors.grey,
+        color: _currentPage == index ? Colors.black : Colors.grey,
         borderRadius: BorderRadius.circular(5),
       ),
     );

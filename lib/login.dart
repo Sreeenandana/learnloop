@@ -200,6 +200,7 @@ class SignUpPageState extends State<SignUpPage> {
           'email': _emailController.text.trim(),
           'createdAt': Timestamp.now(), // Store the account creation time
         });
+        print("saved in initial");
 
         if (mounted) {
           // Navigate to HomePage after successful sign-up
