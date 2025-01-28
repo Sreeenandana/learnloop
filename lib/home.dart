@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'path.dart';
 import 'login.dart';
+import 'settings.dart'; // Import the SettingsPage
+import 'weekly_leaderboard.dart'; // Import the WeeklyLeaderboard
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -59,6 +61,32 @@ class _HomePageState extends State<HomePage> {
                         );
                       },
                       child: const Text('View Learning Path'),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () {
+                        // Navigate to SettingsPage
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SettingsPage(),
+                          ),
+                        );
+                      },
+                      child: const Text('Go to Settings'),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () {
+                        // Navigate to WeeklyLeaderboard
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const WeeklyLeaderboard(),
+                          ),
+                        );
+                      },
+                      child: const Text('View Leaderboard'),
                     ),
                   ],
                 ),

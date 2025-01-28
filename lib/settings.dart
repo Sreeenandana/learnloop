@@ -273,6 +273,18 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _signOut() async {
+    try {
+      await _auth.signOut();
+      Navigator.of(context)
+          .pushReplacementNamed('/login'); // Navigate to Login Page
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to sign out.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -317,6 +329,16 @@ class _ProfilePageState extends State<ProfilePage> {
                   ElevatedButton(
                     onPressed: _updateUsername,
                     child: const Text('Update Username'),
+                  ),
+                  const Spacer(),
+
+                  // Sign Out Button
+                  ElevatedButton(
+                    onPressed: _signOut,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                    ),
+                    child: const Text('Sign Out'),
                   ),
                 ],
               ),

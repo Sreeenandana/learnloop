@@ -3,6 +3,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home.dart';
+import 'weekly_leaderboard.dart';
 import 'path.dart';
 
 class ChapterQuiz extends StatefulWidget {
@@ -73,7 +74,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
   String _generatePromptForQuiz(String topic) {
     return "Generate 10 multiple choice questions (MCQs) about Java, on topic $topic. "
         "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
-        "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. give only 4 options."
+        "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. Give only 4 options."
         "Do not provide any other message or use any special characters unless necessary.";
   }
 
@@ -151,6 +152,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     final firestore = FirebaseFirestore.instance;
 
     try {
+      // Update chapter quiz data
       await firestore
           .collection('users')
           .doc(widget.userId)
@@ -163,6 +165,32 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         'modificationTime': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
+      // Fetch all chapter scores to calculate total score
+      final chapterQuizSnapshot = await firestore
+          .collection('users')
+          .doc(widget.userId)
+          .collection('chapterQuiz')
+          .get();
+
+      int totalScore = 0;
+      for (var doc in chapterQuizSnapshot.docs) {
+        final data = doc.data();
+        final dynamic score = data['score']; // Use dynamic to avoid type issues
+        if (score is num) {
+          // Ensure it's a number
+          totalScore += score.toInt(); // Safely cast to int
+        }
+      }
+
+      // Update totalScore in the user's document
+      await firestore.collection('users').doc(widget.userId).set({
+        'totalPoints': totalScore,
+      }, SetOptions(merge: true));
+
+      // Update leaderboard after finishing the quiz
+      await updateLeaderboard(widget.userId, widget.topic, _score);
+
+      // Mark the topic as completed in the learning path
       await firestore
           .collection('users')
           .doc(widget.userId)
@@ -172,9 +200,10 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         'completed': true,
       });
     } catch (e) {
-      print("Error storing quiz score: $e");
+      print("Error storing quiz score or updating totalPoints: $e");
     }
 
+    // Navigate to the learning path page
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
