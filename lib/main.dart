@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:learnloop/settings.dart';
 import 'firebase_options.dart';
 import 'home.dart';
 import 'login.dart';
@@ -11,9 +10,14 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    //print("Firebase initialized successfully.");
+  } catch (e) {
+    print("Error initializing Firebase: $e");
+  }
 
   runApp(const MyApp());
 }
@@ -25,11 +29,34 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Firebase Login',
-      debugShowCheckedModeBanner: false, // Disable the debug banner
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.blue, // Set the primary color theme
+        primarySwatch: Colors.blue,
       ),
-      home: const SplashScreen(), // Use the sliding splash screen
+      initialRoute: '/',
+      onGenerateRoute: (settings) {
+        print("Navigating to: ${settings.name}");
+        return MaterialPageRoute(
+          builder: (context) {
+            switch (settings.name) {
+              case '/':
+                return const SplashScreen();
+              case '/home':
+                return const HomePage();
+              case '/login':
+                return const LoginPage();
+              default:
+                print("Unknown route: ${settings.name}");
+                return const SplashScreen();
+            }
+          },
+        );
+      },
+      routes: {
+        '/': (context) => const SplashScreen(),
+        '/home': (context) => const HomePage(),
+        '/login': (context) => const LoginPage(),
+      },
     );
   }
 }

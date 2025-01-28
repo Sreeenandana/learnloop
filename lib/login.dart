@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore package
-import 'home.dart';
-import 'initial.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/material.dart';
+import 'home.dart'; // Import your home page
+import 'initial.dart'; // Import the initial page
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,6 +16,7 @@ class LoginPageState extends State<LoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GoogleSignIn _googleSignInService = GoogleSignIn(); // Renamed variable
 
   String _errorMessage = '';
 
@@ -52,6 +54,43 @@ class LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _googleSignIn() async {
+    setState(() {
+      _errorMessage = '';
+    });
+
+    try {
+      final GoogleSignInAccount? googleUser =
+          await _googleSignInService.signIn();
+      if (googleUser == null) {
+        return; // User canceled the sign-in process
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential =
+          await _auth.signInWithCredential(credential);
+
+      if (userCredential.user != null) {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomePage()),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = _handleAuthError(e);
+      });
+    }
+  }
+
   String _handleAuthError(dynamic error) {
     if (error is FirebaseAuthException) {
       switch (error.code) {
@@ -65,7 +104,7 @@ class LoginPageState extends State<LoginPage> {
           return 'An error occurred: ${error.message}';
       }
     } else {
-      return 'An unexpected error occurred.';
+      return 'An unexpected error occurred. ${error.message}';
     }
   }
 
@@ -103,6 +142,11 @@ class LoginPageState extends State<LoginPage> {
               child: const Text('Login'),
             ),
             const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _googleSignIn, // Google Sign-In button
+              child: const Text('Sign in with Google'),
+            ),
+            const SizedBox(height: 16),
             if (_errorMessage.isNotEmpty)
               Text(
                 _errorMessage,
@@ -111,7 +155,6 @@ class LoginPageState extends State<LoginPage> {
             const SizedBox(height: 16),
             TextButton(
               onPressed: () {
-                // Passing the email and password to the SignUpPage
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -154,7 +197,6 @@ class SignUpPageState extends State<SignUpPage> {
   @override
   void initState() {
     super.initState();
-    // Initialize email and password controllers with values passed from LoginPage
     _emailController = TextEditingController(text: widget.email);
     _passwordController = TextEditingController(text: widget.password);
   }
@@ -173,7 +215,6 @@ class SignUpPageState extends State<SignUpPage> {
       _errorMessage = '';
     });
 
-    // Check if the password and confirm password match
     if (_confirmPasswordController.text.trim() !=
         _passwordController.text.trim()) {
       setState(() {
@@ -190,20 +231,17 @@ class SignUpPageState extends State<SignUpPage> {
       );
 
       if (userCredential.user != null) {
-        // Store user name, email, and other details in Firestore
         final user = userCredential.user;
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user!.uid)
             .set({
-          'name': _nameController.text.trim(),
+          'Username': _nameController.text.trim(),
           'email': _emailController.text.trim(),
-          'createdAt': Timestamp.now(), // Store the account creation time
+          'createdAt': Timestamp.now(),
         });
-        print("saved in initial");
 
         if (mounted) {
-          // Navigate to HomePage after successful sign-up
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const QuizApp()),
@@ -230,7 +268,7 @@ class SignUpPageState extends State<SignUpPage> {
           return 'An error occurred: ${error.message}';
       }
     } else {
-      return 'An unexpected error occurred. ${error.message}';
+      return 'An unexpected error occurred.';
     }
   }
 
@@ -245,16 +283,14 @@ class SignUpPageState extends State<SignUpPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            // Name field
             TextField(
               controller: _nameController,
               decoration: const InputDecoration(
-                labelText: 'Name',
+                labelText: 'Username',
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 16),
-            // Email field
             TextField(
               controller: _emailController,
               decoration: const InputDecoration(
@@ -263,7 +299,6 @@ class SignUpPageState extends State<SignUpPage> {
               ),
             ),
             const SizedBox(height: 16),
-            // Password field
             TextField(
               controller: _passwordController,
               decoration: const InputDecoration(
@@ -273,7 +308,6 @@ class SignUpPageState extends State<SignUpPage> {
               obscureText: true,
             ),
             const SizedBox(height: 16),
-            // Confirm Password field
             TextField(
               controller: _confirmPasswordController,
               decoration: const InputDecoration(
