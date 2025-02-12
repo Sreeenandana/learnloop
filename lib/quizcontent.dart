@@ -162,7 +162,8 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         'topic': widget.topic,
         'score': _score,
         'totalQuestions': _questions.length,
-        'modificationTime': FieldValue.serverTimestamp(),
+        'modificationTime': DateTime.now().toIso8601String(),
+        'status': 'completed'
       }, SetOptions(merge: true));
 
       // Fetch all chapter scores to calculate total score
