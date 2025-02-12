@@ -55,7 +55,7 @@ class _QuizPageState extends State<QuizPage> {
     try {
       final response = await model.generateContent([
         Content.text(
-            "Generate a list of 7 unique Python topics in order of learning. Only give topics, no description.")
+            "Generate a list of 7 unique Python topics in order of learning. Only give topics, no description and no serial number.")
       ]);
 
       if (response.text != null) {
