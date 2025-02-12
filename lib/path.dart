@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'content.dart'; // Make sure this exists
 import 'quizcontent.dart';
 import 'resultpage.dart';
 
@@ -17,97 +18,15 @@ class LearningPathPage extends StatefulWidget {
 class _LearningPathPageState extends State<LearningPathPage> {
   bool _isLoading = true;
   String _errorMessage = '';
-  List<String> _topics = [];
   final Map<String, List<Map<String, dynamic>>> _subtopics = {};
-  final Map<String, bool> _selectedTopics = {}; // Store user-selected topics
 
   final _auth = FirebaseAuth.instance;
-
-  // Google Generative AI API Key (Consider storing securely)
-  final String _apiKey =
-      'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44'; // Store securely in env vars
+  final String _apiKey = 'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44';
 
   @override
   void initState() {
     super.initState();
-    _loadUserLearningPath();
-  }
-
-  Future<void> _loadUserLearningPath() async {
-    final FirebaseFirestore firestore = FirebaseFirestore.instance;
-    final userId = _auth.currentUser?.uid;
-
-    if (userId == null) {
-      setState(() {
-        _errorMessage = 'No user is logged in.';
-        _isLoading = false;
-      });
-      return;
-    }
-
-    try {
-      final learningPathSnapshot = await firestore
-          .collection('users')
-          .doc(userId)
-          .collection('learningPath')
-          .get();
-
-      if (learningPathSnapshot.docs.isNotEmpty) {
-        _loadExistingLearningPath(learningPathSnapshot);
-        return;
-      }
-
-      final userDoc = await firestore.collection('users').doc(userId).get();
-      final data = userDoc.data();
-      if (data == null || !data.containsKey('topic_scores')) {
-        setState(() {
-          _errorMessage =
-              'No learning path or initial assessment data found. Please complete the initial assessment.';
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final Map<String, int> topicScores =
-          Map<String, int>.from(data['topic_scores']);
-      if (topicScores.isEmpty) {
-        setState(() {
-          _errorMessage = 'No topic scores found in the initial assessment.';
-          _isLoading = false;
-        });
-        return;
-      }
-
-      setState(() {
-        _selectedTopics.clear();
-        for (var topic in topicScores.keys) {
-          _selectedTopics[topic] = true;
-        }
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Error loading learning path: $e';
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _loadExistingLearningPath(QuerySnapshot learningPathSnapshot) {
-    final List<String> topics = [];
-    final Map<String, List<Map<String, dynamic>>> subtopics = {};
-
-    for (var doc in learningPathSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      topics.add(doc.id);
-      subtopics[doc.id] = List<Map<String, dynamic>>.from(data['subtopics']);
-    }
-
-    setState(() {
-      _topics = topics;
-      _subtopics.addAll(subtopics);
-      _isLoading = false;
-    });
+    _generateLearningPath();
   }
 
   Future<void> _generateLearningPath() async {
@@ -126,13 +45,18 @@ class _LearningPathPageState extends State<LearningPathPage> {
         return;
       }
 
-      _topics = _selectedTopics.entries
-          .where((entry) => entry.value)
-          .map((entry) => entry.key)
-          .toList();
+      if (widget.topicScores == null || widget.topicScores!.isEmpty) {
+        setState(() {
+          _errorMessage =
+              'No topic scores available to generate a learning path.';
+          _isLoading = false;
+        });
+        return;
+      }
 
-      for (var topic in _topics) {
-        await _generateAndLoadSubtopics(topic);
+      for (var topic in widget.topicScores!.keys) {
+        int score = widget.topicScores![topic]!;
+        await _generateAndLoadSubtopics(topic, score);
       }
 
       setState(() {
@@ -146,7 +70,7 @@ class _LearningPathPageState extends State<LearningPathPage> {
     }
   }
 
-  Future<void> _generateAndLoadSubtopics(String topic) async {
+  Future<void> _generateAndLoadSubtopics(String topic, int score) async {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
     final userId = _auth.currentUser?.uid;
 
@@ -154,7 +78,10 @@ class _LearningPathPageState extends State<LearningPathPage> {
     if (_subtopics.containsKey(topic) && _subtopics[topic]!.isNotEmpty) return;
 
     try {
-      final prompt = "Generate 5 subtopics for the topic $topic.";
+      int subtopicCount = score < 40 ? 7 : (score < 70 ? 5 : 3);
+
+      final prompt = "Generate $subtopicCount subtopics for the topic $topic. "
+          "Give only subtopic names, no descriptions, no numbering.";
 
       final model = GenerativeModel(
         model: 'gemini-1.5-flash',
@@ -182,7 +109,7 @@ class _LearningPathPageState extends State<LearningPathPage> {
             .collection('users')
             .doc(userId)
             .collection('learningPath')
-            .doc(topic)
+            .doc(topic.replaceAll(' ', '_'))
             .set({'subtopics': subtopics}, SetOptions(merge: true));
       }
     } catch (e) {
@@ -196,8 +123,48 @@ class _LearningPathPageState extends State<LearningPathPage> {
     return responseText
         .split('\n')
         .where((line) => line.trim().isNotEmpty)
-        .map((subtopic) => {'name': subtopic, 'status': 'incomplete'})
+        .map((subtopic) =>
+            {'name': subtopic, 'status': 'incomplete'}) // Default status
         .toList();
+  }
+
+  void _navigateToContent(String topic, String subtopic) {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) {
+      setState(() {
+        _errorMessage = 'User not logged in.';
+      });
+      return;
+    }
+
+    final subtopics = _subtopics[topic];
+    if (subtopics == null) return;
+
+    int currentIndex = subtopics.indexWhere((item) => item['name'] == subtopic);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SubtopicContentPage(
+          topic: topic,
+          subtopic: subtopic,
+          userId: userId,
+          onSubtopicFinished: () {
+            setState(() {
+              // Mark current subtopic as complete
+              subtopics[currentIndex]['status'] = 'complete';
+            });
+
+            // Move to next subtopic if available
+            if (currentIndex + 1 < subtopics.length) {
+              _navigateToContent(topic, subtopics[currentIndex + 1]['name']);
+            } else {
+              Navigator.pop(context); // Go back if no more subtopics
+            }
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -220,28 +187,31 @@ class _LearningPathPageState extends State<LearningPathPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Learning Path')),
-      body: Column(
-        children: [
-          ElevatedButton(
-            onPressed: _generateLearningPath,
-            child: const Text('Generate Learning Path'),
-          ),
-          Expanded(
-            child: ListView(
-              children: _selectedTopics.keys.map((topic) {
-                return CheckboxListTile(
-                  title: Text(topic),
-                  value: _selectedTopics[topic],
-                  onChanged: (bool? value) {
-                    setState(() {
-                      _selectedTopics[topic] = value ?? false;
-                    });
-                  },
-                );
-              }).toList(),
-            ),
-          ),
-        ],
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: ListView(
+          children: _subtopics.keys.map((topic) {
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              child: ExpansionTile(
+                title: Text(topic,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+                children: _subtopics[topic]!.map((subtopic) {
+                  return ListTile(
+                    title: Text(subtopic['name']),
+                    trailing: subtopic['status'] == 'complete'
+                        ? const Icon(Icons.check_circle, color: Colors.green)
+                        : null, // Show tick only if complete
+                    onTap: () => _navigateToContent(topic, subtopic['name']),
+                  );
+                }).toList(),
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }

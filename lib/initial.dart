@@ -55,7 +55,7 @@ class _QuizPageState extends State<QuizPage> {
     try {
       final response = await model.generateContent([
         Content.text(
-            "Generate a list of 7 unique Python topics in order of learning. Only give topics, no description and no serial number.")
+            "Generate a list of 7 unique Python topics in order of learning. Only give topics, no description and no serial number.the topic names should have no special characters in it ")
       ]);
 
       if (response.text != null) {
@@ -140,9 +140,9 @@ class _QuizPageState extends State<QuizPage> {
         print("Fetching questions for topic: $topic");
         final response = await model.generateContent([
           Content.text(
-              "Generate $questionsPerTopic beginner-level multiple-choice questions (MCQs) "
+              "Generate 2 beginner-level multiple-choice questions (MCQs) "
               "from the topic '$topic'. Format each question as 'qstn:', options as 'opt:' "
-              "(comma-separated), 'ans:' for the correct answer, and 'top:' for the topic.")
+              "(comma-separated), 'ans:' for the correct answer, and 'top:' for the topic. do not repeat questions")
         ]);
 
         if (response.text != null) {

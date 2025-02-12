@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'path.dart'; // Ensure this is correctly imported
+import 'path.dart'; // Import your LearningPathPage
 
 class ResultPage extends StatelessWidget {
   final int score;
@@ -59,24 +59,13 @@ class ResultPage extends StatelessWidget {
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                print("Navigation Button Pressed");
-                print("Topic Scores: $topicScores");
-
-                try {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) {
-                        print("Navigating to LearningPathPage...");
-                        return LearningPathPage(topicScores: topicScores);
-                      },
-                    ),
-                  ).then((_) {
-                    print("Returned from LearningPathPage");
-                  });
-                } catch (e) {
-                  print("Navigation Error: $e");
-                }
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        LearningPathPage(topicScores: topicScores),
+                  ),
+                );
               },
               child: const Text("Go to Learning Path"),
             ),
