@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:learnloop/content.dart';
 import 'initial.dart';
-import 'content.dart';
 import 'quizcontent.dart';
 
 class LearningPathPage extends StatefulWidget {
@@ -248,7 +247,7 @@ class _LearningPathPageState extends State<LearningPathPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const QuizApp(),
+                      builder: (context) => QuizPage(),
                     ),
                   );
                 },

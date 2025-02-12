@@ -2,16 +2,222 @@ import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'path.dart';
-import 'home.dart';
 
+class QuizPage extends StatefulWidget {
+  @override
+  _QuizPageState createState() => _QuizPageState();
+}
+
+class _QuizPageState extends State<QuizPage> {
+  final String _apiKey = 'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44';
+  final List<String> _topics = [
+    'OOP Concepts',
+    'Data Structures',
+    'Algorithms',
+    'Database Management',
+    'Multithreading',
+    'Networking',
+    'Design Patterns'
+  ];
+  final Set<String> _selectedTopics = {};
+  bool _quizStarted = false;
+  List<Map<String, dynamic>> _questions = [];
+  int _currentQuestionIndex = 0;
+  String? _selectedAnswer;
+  Map<String, int> _topicScores = {};
+
+  Future<void> _startQuiz() async {
+    if (_selectedTopics.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one topic.')),
+      );
+      return;
+    }
+    setState(() {
+      _quizStarted = true;
+      _topicScores = {for (var topic in _selectedTopics) topic: 0};
+    });
+    await _fetchQuestions();
+  }
+
+  Future<void> _fetchQuestions() async {
+    final model = GenerativeModel(
+      model: 'gemini-1.5-flash',
+      apiKey: _apiKey,
+    );
+    List<Map<String, dynamic>> generatedQuestions = [];
+
+    for (var topic in _selectedTopics) {
+      final response = await model.generateContent([
+        Content.text(
+            "Generate a multiple-choice question about $topic with four options and indicate the correct answer.")
+      ]);
+
+      if (response.text != null) {
+        generatedQuestions.add(_parseQuestion(response.text!, topic));
+      }
+    }
+
+    setState(() {
+      _questions = generatedQuestions;
+    });
+  }
+
+  Map<String, dynamic> _parseQuestion(String text, String topic) {
+    List<String> lines = text.split('\n');
+    return {
+      'topic': topic,
+      'question': lines[0],
+      'options': lines.sublist(1, 5),
+      'answer': lines[5]
+    };
+  }
+
+  void _submitAnswer() {
+    if (_selectedAnswer == null) return;
+
+    String topic = _questions[_currentQuestionIndex]['topic'];
+    if (_selectedAnswer == _questions[_currentQuestionIndex]['answer']) {
+      _topicScores[topic] = (_topicScores[topic] ?? 0) + 1;
+    }
+
+    if (_currentQuestionIndex < _questions.length - 1) {
+      setState(() {
+        _currentQuestionIndex++;
+        _selectedAnswer = null;
+      });
+    } else {
+      _showResult();
+    }
+  }
+
+  void _showResult() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Quiz Completed"),
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: _topicScores.entries
+              .map((entry) => Text("${entry.key}: ${entry.value}"))
+              .toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _quizStarted = false;
+                _selectedTopics.clear();
+                _currentQuestionIndex = 0;
+                _selectedAnswer = null;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text("OK"),
+          )
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Quiz Page')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: _quizStarted ? _buildQuizUI() : _buildTopicSelectionUI(),
+      ),
+    );
+  }
+
+  Widget _buildTopicSelectionUI() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Choose topics for the quiz:',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        Expanded(
+          child: ListView(
+            children: _topics.map((topic) {
+              return CheckboxListTile(
+                title: Text(topic),
+                value: _selectedTopics.contains(topic),
+                onChanged: (bool? selected) {
+                  setState(() {
+                    if (selected == true) {
+                      _selectedTopics.add(topic);
+                    } else {
+                      _selectedTopics.remove(topic);
+                    }
+                  });
+                },
+              );
+            }).toList(),
+          ),
+        ),
+        Center(
+          child: ElevatedButton(
+            onPressed: _startQuiz,
+            child: const Text('Start Quiz'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuizUI() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Question ${_currentQuestionIndex + 1} / ${_questions.length}",
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          _questions[_currentQuestionIndex]['question'],
+          style: const TextStyle(fontSize: 16),
+        ),
+        const SizedBox(height: 10),
+        ..._questions[_currentQuestionIndex]['options'].map<Widget>((option) {
+          return RadioListTile<String>(
+            title: Text(option),
+            value: option,
+            groupValue: _selectedAnswer,
+            onChanged: (String? value) {
+              setState(() {
+                _selectedAnswer = value;
+              });
+            },
+          );
+        }).toList(),
+        const SizedBox(height: 20),
+        Center(
+          child: ElevatedButton(
+            onPressed: _submitAnswer,
+            child: Text(
+              _currentQuestionIndex < _questions.length - 1 ? "Next" : "Finish",
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/*
 class QuizApp extends StatelessWidget {
   const QuizApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Python Quiz',
+      title: 'Initial Assessment',
       theme: ThemeData(
         primarySwatch: Colors.green,
         scaffoldBackgroundColor: Colors.white,
@@ -53,7 +259,7 @@ class LevelSelectionPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Select Difficulty Level')),
+      appBar: AppBar(title: const Text('Difficulty Level')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -412,4 +618,4 @@ class ResultPage extends StatelessWidget {
       ),
     );
   }
-}
+}*/

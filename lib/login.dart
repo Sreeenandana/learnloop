@@ -2,8 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/material.dart';
-import 'home.dart'; // Import your home page
-import 'initial.dart'; // Import the initial page
+import 'home.dart';
+import 'initial.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -244,7 +244,7 @@ class SignUpPageState extends State<SignUpPage> {
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const QuizApp()),
+            MaterialPageRoute(builder: (context) => QuizPage()),
           );
         }
       }
