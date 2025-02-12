@@ -3,6 +3,7 @@ import 'home.dart'; // Import your HomePage
 import 'login.dart'; // Import your LoginPage
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -42,7 +43,8 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(221, 160, 221, 1), // Set your preferred background color
+      backgroundColor: const Color.fromRGBO(
+          221, 160, 221, 1), // Set your preferred background color
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
