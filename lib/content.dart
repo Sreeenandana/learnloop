@@ -135,17 +135,37 @@ class SubtopicContentPage extends StatelessWidget {
       final docRef = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
-          .collection('topics')
-          .doc(topic)
-          .collection('subtopics')
-          .doc(subtopic);
+          .collection('learningPath')
+          .doc(topic.replaceAll(' ', '_'));
 
-      await docRef.update({
-        'status': 'finished',
-        'finishedAt': FieldValue.serverTimestamp(),
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final docSnapshot = await transaction.get(docRef);
+
+        if (docSnapshot.exists) {
+          List<dynamic> subtopicsDynamic =
+              docSnapshot.data()?['subtopics'] ?? [];
+
+          // Convert list to mutable List<Map<String, dynamic>>
+          List<Map<String, dynamic>> subtopics = subtopicsDynamic.map((s) {
+            return Map<String, dynamic>.from(s);
+          }).toList();
+
+          // Find the subtopic and update status
+          for (var sub in subtopics) {
+            if (sub['name'] == subtopic) {
+              sub['status'] = 'completed';
+              sub['finishedAt'] =
+                  DateTime.now().toIso8601String(); // Use timestamp as string
+              break;
+            }
+          }
+
+          // Update only the modified array
+          transaction.update(docRef, {'subtopics': subtopics});
+        }
       });
 
-      print("Subtopic status updated to 'finished'");
+      print("Subtopic '$subtopic' marked as completed in Firestore.");
     } catch (e) {
       print("Error updating subtopic status: $e");
     }

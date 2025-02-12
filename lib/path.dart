@@ -97,7 +97,8 @@ class _LearningPathPageState extends State<LearningPathPage> {
       int subtopicCount = score < 40 ? 7 : (score < 70 ? 5 : 3);
 
       final prompt = "Generate $subtopicCount subtopics for the topic $topic. "
-          "Give only subtopic names, no descriptions, no numbering.";
+          "Give only subtopic names, no descriptions, no numbering."
+          "lastly also give a quiz title for the given topic. it should be'quiz:$topic.' ";
 
       final model = GenerativeModel(
         model: 'gemini-1.5-flash',
@@ -139,8 +140,7 @@ class _LearningPathPageState extends State<LearningPathPage> {
     return responseText
         .split('\n')
         .where((line) => line.trim().isNotEmpty)
-        .map((subtopic) =>
-            {'name': subtopic, 'status': 'incomplete'}) // Default status
+        .map((subtopic) => {'name': subtopic}) // Default status
         .toList();
   }
 
@@ -158,29 +158,47 @@ class _LearningPathPageState extends State<LearningPathPage> {
 
     int currentIndex = subtopics.indexWhere((item) => item['name'] == subtopic);
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => SubtopicContentPage(
-          topic: topic,
-          subtopic: subtopic,
-          userId: userId,
-          onSubtopicFinished: () {
-            setState(() {
-              // Mark current subtopic as complete
-              subtopics[currentIndex]['status'] = 'complete';
-            });
-
-            // Move to next subtopic if available
-            if (currentIndex + 1 < subtopics.length) {
-              _navigateToContent(topic, subtopics[currentIndex + 1]['name']);
-            } else {
-              Navigator.pop(context); // Go back if no more subtopics
-            }
-          },
+    if (subtopic.toLowerCase().startsWith("quiz:")) {
+      // Navigate to QuizContentPage
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChapterQuiz(
+            topic: topic,
+            userId: userId,
+            onQuizFinished: () {
+              // Handle quiz completion, e.g., navigate back
+              Navigator.pop(context);
+            },
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      // Navigate to SubtopicContentPage
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SubtopicContentPage(
+            topic: topic,
+            subtopic: subtopic,
+            userId: userId,
+            onSubtopicFinished: () {
+              setState(() {
+                // Mark current subtopic as complete
+                subtopics[currentIndex]['status'] = 'complete';
+              });
+
+              // Move to next subtopic if available
+              if (currentIndex + 1 < subtopics.length) {
+                _navigateToContent(topic, subtopics[currentIndex + 1]['name']);
+              } else {
+                Navigator.pop(context); // Go back if no more subtopics
+              }
+            },
+          ),
+        ),
+      );
+    }
   }
 
   @override
