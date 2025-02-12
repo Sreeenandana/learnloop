@@ -112,6 +112,7 @@ class LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      backgroundColor: Colors.white,
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24.0),
         child: Column(
@@ -172,7 +173,13 @@ class LoginPageState extends State<LoginPage> {
                 backgroundColor:
                     const Color(0xFFdda0dd), // Correct way in Flutter 3.22.2
               ),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor:
+                    const Color(0xFFdda0dd), // Correct way in Flutter 3.22.2
+              ),
               child: const Text('Login',
+                  style: TextStyle(fontSize: 18, color: Colors.white),
                   style: TextStyle(fontSize: 18, color: Colors.white)),
             ),
             const SizedBox(height: 16),
