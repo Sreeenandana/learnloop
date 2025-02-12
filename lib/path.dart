@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:learnloop/content.dart';
 import 'initial.dart';
 import 'quizcontent.dart';
+import 'resultpage.dart';
 
 class LearningPathPage extends StatefulWidget {
   final Map<String, int>? topicScores;

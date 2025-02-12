@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'resultpage.dart';
 
 class QuizPage extends StatefulWidget {
   @override
@@ -13,15 +14,35 @@ class _QuizPageState extends State<QuizPage> {
   List<String> _topics = [];
   final Set<String> _selectedTopics = {};
   bool _quizStarted = false;
+  bool _isLoadingTopics = true;
+  bool _isLoadingQuestions = false;
   List<Map<String, dynamic>> _questions = [];
   int _currentQuestionIndex = 0;
   String? _selectedAnswer;
   Map<String, int> _topicScores = {};
+  Map<int, String> _userAnswers = {};
+  int _score = 0;
 
   @override
   void initState() {
     super.initState();
-    _fetchTopics();
+    _fetchTopics(); // Fetch topics when the page loads
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoadingTopics) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Loading Topics')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_quizStarted) {
+      return _buildTopicSelectionUI();
+    }
+
+    return _buildQuizUI();
   }
 
   Future<void> _fetchTopics() async {
@@ -34,109 +55,235 @@ class _QuizPageState extends State<QuizPage> {
     try {
       final response = await model.generateContent([
         Content.text(
-            "Generate a list of 7 unique python topics in order of learning.")
+            "Generate a list of 7 unique Python topics in order of learning. Only give topics, no description.")
       ]);
 
       if (response.text != null) {
-        _topics =
-            response.text!.split('\n').where((t) => t.isNotEmpty).toList();
-        print("Topics generated: $_topics");
-        setState(() {});
-      } else {
-        print("Error: No topics generated.");
+        setState(() {
+          _topics =
+              response.text!.split('\n').where((t) => t.isNotEmpty).toList();
+          _isLoadingTopics = false; // Stop loading once topics are received
+          print("Topics received: $_topics");
+        });
       }
     } catch (e) {
-      print("Error fetching topics: $e");
+      _showError("Error fetching topics: $e");
     }
   }
 
-  Future<void> _startQuiz() async {
-    print("Starting quiz...");
-    print("Selected topics: $_selectedTopics");
+  Widget _buildTopicSelectionUI() {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Select Topics')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Select topics for your quiz:",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: ListView(
+                children: _topics.map((topic) {
+                  return CheckboxListTile(
+                    title: Text(topic),
+                    value: _selectedTopics.contains(topic),
+                    onChanged: (bool? selected) {
+                      setState(() {
+                        if (selected == true) {
+                          _selectedTopics.add(topic);
+                        } else {
+                          _selectedTopics.remove(topic);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: _selectedTopics.isNotEmpty ? _startQuiz : null,
+              child: const Text("Start Quiz"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
+  void _startQuiz() {
+    if (_selectedTopics.isEmpty) {
+      _showError("Please select at least one topic to start the quiz.");
+      return;
+    }
     setState(() {
       _quizStarted = true;
-      _topicScores = {
-        for (var topic in _topics)
-          topic: _selectedTopics.contains(topic) ? 0 : 0
-      };
+      _isLoadingQuestions = true;
     });
-
-    await _fetchQuestions();
+    _fetchQuestions();
   }
 
   Future<void> _fetchQuestions() async {
-    print("Fetching questions...");
     final model = GenerativeModel(
       model: 'gemini-1.5-flash',
       apiKey: _apiKey,
     );
+
     List<Map<String, dynamic>> generatedQuestions = [];
+    int questionsPerTopic =
+        (20 / _selectedTopics.length).ceil(); // Distribute 20 questions
 
     for (var topic in _selectedTopics) {
       try {
+        print("Fetching questions for topic: $topic");
         final response = await model.generateContent([
           Content.text(
-              "Generate a multiple-choice question about $topic with four options and specify the correct answer.")
+              "Generate $questionsPerTopic beginner-level multiple-choice questions (MCQs) "
+              "from the topic '$topic'. Format each question as 'qstn:', options as 'opt:' "
+              "(comma-separated), 'ans:' for the correct answer, and 'top:' for the topic.")
         ]);
 
         if (response.text != null) {
-          final parsedQuestion = _parseQuestion(response.text!, topic);
-          generatedQuestions.add(parsedQuestion);
-          print("Question generated for $topic: $parsedQuestion");
-        } else {
-          print("Error: No question generated for topic: $topic");
+          List<Map<String, dynamic>> parsed = _parseQuestions(response.text!);
+          print("Parsed questions for $topic: $parsed");
+          generatedQuestions.addAll(parsed);
         }
       } catch (e) {
-        print("Error fetching question for $topic: $e");
+        _showError("Error fetching questions for $topic: $e");
       }
     }
 
     setState(() {
-      _questions = generatedQuestions;
+      _questions =
+          generatedQuestions.take(20).toList(); // Limit to 20 questions
+      _isLoadingQuestions = false;
     });
-
-    print("Total questions fetched: ${_questions.length}");
   }
 
-  Map<String, dynamic> _parseQuestion(String text, String topic) {
-    List<String> lines =
-        text.split('\n').where((line) => line.isNotEmpty).toList();
+  List<Map<String, dynamic>> _parseQuestions(String responseText) {
+    List<Map<String, dynamic>> parsedQuestions = [];
+    List<String> lines = responseText.split('\n');
 
-    if (lines.length < 6) {
-      print(
-          "Error: Question format incorrect for topic $topic. Response: $text");
-      return {
-        'topic': topic,
-        'question': 'Error: Invalid question format',
-        'options': [],
-        'answer': ''
-      };
+    String? currentQuestion;
+    List<String> currentOptions = [];
+    String? correctAnswer;
+    String? topic;
+
+    for (String line in lines) {
+      line = line.trim();
+      if (line.startsWith("qstn:")) {
+        if (currentQuestion != null &&
+            currentOptions.isNotEmpty &&
+            correctAnswer != null) {
+          parsedQuestions.add({
+            "question": currentQuestion,
+            "options": List<String>.from(currentOptions),
+            "correct_answer": correctAnswer,
+            "topic": topic ?? "General",
+          });
+        }
+        currentQuestion = line.substring(5).trim();
+        currentOptions = [];
+        correctAnswer = null;
+        topic = null;
+      } else if (line.startsWith("opt:")) {
+        currentOptions =
+            line.substring(4).split(',').map((s) => s.trim()).toList();
+      } else if (line.startsWith("ans:")) {
+        correctAnswer = line.substring(4).trim();
+      } else if (line.startsWith("top:")) {
+        topic = line.substring(4).trim();
+      }
     }
 
-    return {
-      'topic': topic,
-      'question': lines[0],
-      'options': lines.sublist(1, 5),
-      'answer': lines[5]
-    };
+    if (currentQuestion != null &&
+        currentOptions.isNotEmpty &&
+        correctAnswer != null) {
+      parsedQuestions.add({
+        "question": currentQuestion,
+        "options": List<String>.from(currentOptions),
+        "correct_answer": correctAnswer,
+        "topic": topic ?? "General",
+      });
+    }
+
+    return parsedQuestions;
+  }
+
+  Widget _buildQuizUI() {
+    if (_isLoadingQuestions) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Quiz')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_questions.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Quiz')),
+        body: const Center(child: Text('No questions available.')),
+      );
+    }
+
+    final question = _questions[_currentQuestionIndex];
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Quiz')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Question ${_currentQuestionIndex + 1}/${_questions.length}",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              question['question'],
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 20),
+            Column(
+              children: (question['options'] as List<String>).map((option) {
+                return RadioListTile<String>(
+                  title: Text(option),
+                  value: option,
+                  groupValue: _selectedAnswer,
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedAnswer = value;
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _selectedAnswer == null ? null : _submitAnswer,
+              child: Text(_currentQuestionIndex < _questions.length - 1
+                  ? "Next"
+                  : "Finish Quiz"),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _submitAnswer() {
-    if (_selectedAnswer == null) {
-      print("No answer selected.");
-      return;
-    }
+    if (_selectedAnswer == null) return;
 
-    String topic = _questions[_currentQuestionIndex]['topic'];
-    print("Answer submitted for topic $topic: $_selectedAnswer");
+    final question = _questions[_currentQuestionIndex];
+    final correctAnswer = question['correct_answer'];
+    final topic = question['topic'] ?? 'General';
 
-    if (_selectedAnswer == _questions[_currentQuestionIndex]['answer']) {
+    _userAnswers[_currentQuestionIndex] = _selectedAnswer!;
+    if (_selectedAnswer == correctAnswer) {
+      _score++;
       _topicScores[topic] = (_topicScores[topic] ?? 0) + 1;
-      print("Correct answer! Updated score: ${_topicScores[topic]}");
-    } else {
-      print(
-          "Incorrect answer. Correct answer: ${_questions[_currentQuestionIndex]['answer']}");
     }
 
     if (_currentQuestionIndex < _questions.length - 1) {
@@ -145,155 +292,37 @@ class _QuizPageState extends State<QuizPage> {
         _selectedAnswer = null;
       });
     } else {
-      _saveResultsToFirebase();
+      _goToResultPage();
     }
   }
 
-  Future<void> _saveResultsToFirebase() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print("Error: No authenticated user found.");
-      return;
+  void _goToResultPage() {
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown_user';
+    for (var topic in _topics) {
+      _topicScores.putIfAbsent(topic, () => 0);
     }
 
-    try {
-      await FirebaseFirestore.instance
-          .collection('quiz_results')
-          .doc(user.uid)
-          .set({
-        'scores': _topicScores,
-        'timestamp': Timestamp.now(),
-      });
-
-      print("Quiz results saved to Firebase: $_topicScores");
-      _showResult();
-    } catch (e) {
-      print("Error saving results to Firebase: $e");
-    }
-  }
-
-  void _showResult() {
-    print("Showing quiz results...");
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Quiz Completed"),
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: _topicScores.entries
-              .map((entry) => Text("${entry.key}: ${entry.value}"))
-              .toList(),
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ResultPage(
+          score: _score,
+          total: _questions.length,
+          topicScores: _topicScores,
+          userId: userId,
+          questions: _questions,
+          userAnswers: _userAnswers,
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _quizStarted = false;
-                _selectedTopics.clear();
-                _currentQuestionIndex = 0;
-                _selectedAnswer = null;
-              });
-              Navigator.pop(context);
-            },
-            child: const Text("OK"),
-          )
-        ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Quiz Page')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: _quizStarted ? _buildQuizUI() : _buildTopicSelectionUI(),
-      ),
-    );
-  }
-
-  Widget _buildTopicSelectionUI() {
-    return _topics.isEmpty
-        ? const Center(child: CircularProgressIndicator())
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Choose topics for the quiz:',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: ListView(
-                  children: _topics.map((topic) {
-                    return CheckboxListTile(
-                      title: Text(topic),
-                      value: _selectedTopics.contains(topic),
-                      onChanged: (bool? selected) {
-                        setState(() {
-                          if (selected == true) {
-                            _selectedTopics.add(topic);
-                          } else {
-                            _selectedTopics.remove(topic);
-                          }
-                        });
-                        print("Updated selected topics: $_selectedTopics");
-                      },
-                    );
-                  }).toList(),
-                ),
-              ),
-              Center(
-                child: ElevatedButton(
-                  onPressed: _startQuiz,
-                  child: const Text('Start Quiz'),
-                ),
-              ),
-            ],
-          );
-  }
-
-  Widget _buildQuizUI() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Question ${_currentQuestionIndex + 1} / ${_questions.length}",
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          _questions[_currentQuestionIndex]['question'],
-          style: const TextStyle(fontSize: 16),
-        ),
-        const SizedBox(height: 10),
-        ..._questions[_currentQuestionIndex]['options'].map((option) {
-          return RadioListTile<String>(
-            title: Text(option),
-            value: option,
-            groupValue: _selectedAnswer,
-            onChanged: (String? value) {
-              setState(() {
-                _selectedAnswer = value;
-              });
-            },
-          );
-        }).toList(),
-        const SizedBox(height: 20),
-        Center(
-          child: ElevatedButton(
-            onPressed: _submitAnswer,
-            child: Text(_currentQuestionIndex < _questions.length - 1
-                ? "Next"
-                : "Finish"),
-          ),
-        ),
-      ],
-    );
+  void _showError(String message) {
+    print("ERROR: $message");
   }
 }
+
+
 
 
 
