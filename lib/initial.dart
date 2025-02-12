@@ -10,15 +10,7 @@ class QuizPage extends StatefulWidget {
 
 class _QuizPageState extends State<QuizPage> {
   final String _apiKey = 'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44';
-  final List<String> _topics = [
-    'OOP Concepts',
-    'Data Structures',
-    'Algorithms',
-    'Database Management',
-    'Multithreading',
-    'Networking',
-    'Design Patterns'
-  ];
+  List<String> _topics = [];
   final Set<String> _selectedTopics = {};
   bool _quizStarted = false;
   List<Map<String, dynamic>> _questions = [];
@@ -26,21 +18,55 @@ class _QuizPageState extends State<QuizPage> {
   String? _selectedAnswer;
   Map<String, int> _topicScores = {};
 
-  Future<void> _startQuiz() async {
-    if (_selectedTopics.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one topic.')),
-      );
-      return;
+  @override
+  void initState() {
+    super.initState();
+    _fetchTopics();
+  }
+
+  Future<void> _fetchTopics() async {
+    print("Fetching topics...");
+    final model = GenerativeModel(
+      model: 'gemini-1.5-flash',
+      apiKey: _apiKey,
+    );
+
+    try {
+      final response = await model.generateContent([
+        Content.text(
+            "Generate a list of 7 unique python topics in order of learning.")
+      ]);
+
+      if (response.text != null) {
+        _topics =
+            response.text!.split('\n').where((t) => t.isNotEmpty).toList();
+        print("Topics generated: $_topics");
+        setState(() {});
+      } else {
+        print("Error: No topics generated.");
+      }
+    } catch (e) {
+      print("Error fetching topics: $e");
     }
+  }
+
+  Future<void> _startQuiz() async {
+    print("Starting quiz...");
+    print("Selected topics: $_selectedTopics");
+
     setState(() {
       _quizStarted = true;
-      _topicScores = {for (var topic in _selectedTopics) topic: 0};
+      _topicScores = {
+        for (var topic in _topics)
+          topic: _selectedTopics.contains(topic) ? 0 : 0
+      };
     });
+
     await _fetchQuestions();
   }
 
   Future<void> _fetchQuestions() async {
+    print("Fetching questions...");
     final model = GenerativeModel(
       model: 'gemini-1.5-flash',
       apiKey: _apiKey,
@@ -48,23 +74,46 @@ class _QuizPageState extends State<QuizPage> {
     List<Map<String, dynamic>> generatedQuestions = [];
 
     for (var topic in _selectedTopics) {
-      final response = await model.generateContent([
-        Content.text(
-            "Generate a multiple-choice question about $topic with four options and indicate the correct answer.")
-      ]);
+      try {
+        final response = await model.generateContent([
+          Content.text(
+              "Generate a multiple-choice question about $topic with four options and specify the correct answer.")
+        ]);
 
-      if (response.text != null) {
-        generatedQuestions.add(_parseQuestion(response.text!, topic));
+        if (response.text != null) {
+          final parsedQuestion = _parseQuestion(response.text!, topic);
+          generatedQuestions.add(parsedQuestion);
+          print("Question generated for $topic: $parsedQuestion");
+        } else {
+          print("Error: No question generated for topic: $topic");
+        }
+      } catch (e) {
+        print("Error fetching question for $topic: $e");
       }
     }
 
     setState(() {
       _questions = generatedQuestions;
     });
+
+    print("Total questions fetched: ${_questions.length}");
   }
 
   Map<String, dynamic> _parseQuestion(String text, String topic) {
-    List<String> lines = text.split('\n');
+    List<String> lines =
+        text.split('\n').where((line) => line.isNotEmpty).toList();
+
+    if (lines.length < 6) {
+      print(
+          "Error: Question format incorrect for topic $topic. Response: $text");
+      return {
+        'topic': topic,
+        'question': 'Error: Invalid question format',
+        'options': [],
+        'answer': ''
+      };
+    }
+
     return {
       'topic': topic,
       'question': lines[0],
@@ -74,11 +123,20 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   void _submitAnswer() {
-    if (_selectedAnswer == null) return;
+    if (_selectedAnswer == null) {
+      print("No answer selected.");
+      return;
+    }
 
     String topic = _questions[_currentQuestionIndex]['topic'];
+    print("Answer submitted for topic $topic: $_selectedAnswer");
+
     if (_selectedAnswer == _questions[_currentQuestionIndex]['answer']) {
       _topicScores[topic] = (_topicScores[topic] ?? 0) + 1;
+      print("Correct answer! Updated score: ${_topicScores[topic]}");
+    } else {
+      print(
+          "Incorrect answer. Correct answer: ${_questions[_currentQuestionIndex]['answer']}");
     }
 
     if (_currentQuestionIndex < _questions.length - 1) {
@@ -87,11 +145,35 @@ class _QuizPageState extends State<QuizPage> {
         _selectedAnswer = null;
       });
     } else {
+      _saveResultsToFirebase();
+    }
+  }
+
+  Future<void> _saveResultsToFirebase() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      print("Error: No authenticated user found.");
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('quiz_results')
+          .doc(user.uid)
+          .set({
+        'scores': _topicScores,
+        'timestamp': Timestamp.now(),
+      });
+
+      print("Quiz results saved to Firebase: $_topicScores");
       _showResult();
+    } catch (e) {
+      print("Error saving results to Firebase: $e");
     }
   }
 
   void _showResult() {
+    print("Showing quiz results...");
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -133,41 +215,44 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   Widget _buildTopicSelectionUI() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Choose topics for the quiz:',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-        Expanded(
-          child: ListView(
-            children: _topics.map((topic) {
-              return CheckboxListTile(
-                title: Text(topic),
-                value: _selectedTopics.contains(topic),
-                onChanged: (bool? selected) {
-                  setState(() {
-                    if (selected == true) {
-                      _selectedTopics.add(topic);
-                    } else {
-                      _selectedTopics.remove(topic);
-                    }
-                  });
-                },
-              );
-            }).toList(),
-          ),
-        ),
-        Center(
-          child: ElevatedButton(
-            onPressed: _startQuiz,
-            child: const Text('Start Quiz'),
-          ),
-        ),
-      ],
-    );
+    return _topics.isEmpty
+        ? const Center(child: CircularProgressIndicator())
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Choose topics for the quiz:',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: ListView(
+                  children: _topics.map((topic) {
+                    return CheckboxListTile(
+                      title: Text(topic),
+                      value: _selectedTopics.contains(topic),
+                      onChanged: (bool? selected) {
+                        setState(() {
+                          if (selected == true) {
+                            _selectedTopics.add(topic);
+                          } else {
+                            _selectedTopics.remove(topic);
+                          }
+                        });
+                        print("Updated selected topics: $_selectedTopics");
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+              Center(
+                child: ElevatedButton(
+                  onPressed: _startQuiz,
+                  child: const Text('Start Quiz'),
+                ),
+              ),
+            ],
+          );
   }
 
   Widget _buildQuizUI() {
@@ -184,7 +269,7 @@ class _QuizPageState extends State<QuizPage> {
           style: const TextStyle(fontSize: 16),
         ),
         const SizedBox(height: 10),
-        ..._questions[_currentQuestionIndex]['options'].map<Widget>((option) {
+        ..._questions[_currentQuestionIndex]['options'].map((option) {
           return RadioListTile<String>(
             title: Text(option),
             value: option,
@@ -200,15 +285,17 @@ class _QuizPageState extends State<QuizPage> {
         Center(
           child: ElevatedButton(
             onPressed: _submitAnswer,
-            child: Text(
-              _currentQuestionIndex < _questions.length - 1 ? "Next" : "Finish",
-            ),
+            child: Text(_currentQuestionIndex < _questions.length - 1
+                ? "Next"
+                : "Finish"),
           ),
         ),
       ],
     );
   }
 }
+
+
 
 /*
 class QuizApp extends StatelessWidget {
