@@ -55,7 +55,7 @@ class _QuizPageState extends State<QuizPage> {
     try {
       final response = await model.generateContent([
         Content.text(
-            "Generate a list of 7 unique Python topics in order of learning. Only give topics, no description and no serial number.the topic names should have no special characters in it ")
+            "Generate a list of 7 unique java topics in order of learning. Only give topics, no description and no serial number.the topic names should have no special characters in it ")
       ]);
 
       if (response.text != null) {
@@ -140,9 +140,8 @@ class _QuizPageState extends State<QuizPage> {
         print("Fetching questions for topic: $topic");
         final response = await model.generateContent([
           Content.text(
-              "Generate 2 beginner-level multiple-choice questions (MCQs) "
-              "from the topic '$topic'. Format each question as 'qstn:', options as 'opt:' "
-              "(comma-separated), 'ans:' for the correct answer, and 'top:' for the topic. do not repeat questions")
+              "Generate $questionsPerTopic beginner-level multiple-choice questions (MCQs) with exactly 4 options. "
+              "from the topic '$topic'. Format each question as 'qstn:', options as 'opt:'(comma-separated), 'ans:' for the correct answer, and 'top:' for the topic. do not repeat questions. do not put unnecessary special characters")
         ]);
 
         if (response.text != null) {
