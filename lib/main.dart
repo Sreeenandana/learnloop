@@ -31,31 +31,13 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Firebase Login',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.blue, // Set the primary color theme
       ),
-      initialRoute: '/',
-      onGenerateRoute: (settings) {
-        print("Navigating to: ${settings.name}");
-        return MaterialPageRoute(
-          builder: (context) {
-            switch (settings.name) {
-              case '/':
-                return const SplashScreen();
-              case '/home':
-                return const HomePage();
-              case '/login':
-                return const LoginPage();
-              default:
-                print("Unknown route: ${settings.name}");
-                return const SplashScreen();
-            }
-          },
-        );
-      },
+      initialRoute: '/', // Define the initial route
       routes: {
-        '/': (context) => const SplashScreen(),
-        '/home': (context) => const HomePage(),
-        '/login': (context) => const LoginPage(),
+        '/': (context) => const SplashScreen(), // SplashScreen as the initial screen
+        '/home': (context) => const HomePage(), // Route for HomePage
+        '/login': (context) => const LoginPage(), // Route for LoginPage
       },
     );
   }
