@@ -133,7 +133,7 @@ class _QuizPageState extends State<QuizPage> {
 
     List<Map<String, dynamic>> generatedQuestions = [];
     int questionsPerTopic =
-        (20 / _selectedTopics.length).ceil(); // Distribute 20 questions
+        (10 / _selectedTopics.length).ceil(); // Distribute 20 questions
 
     for (var topic in _selectedTopics) {
       try {

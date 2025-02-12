@@ -45,18 +45,34 @@ class _LearningPathPageState extends State<LearningPathPage> {
         return;
       }
 
-      if (widget.topicScores == null || widget.topicScores!.isEmpty) {
-        setState(() {
-          _errorMessage =
-              'No topic scores available to generate a learning path.';
-          _isLoading = false;
-        });
-        return;
+      // If topicScores is not provided, try to fetch from Firestore
+      Map<String, int> topicScores = widget.topicScores ?? {};
+
+      if (topicScores.isEmpty) {
+        final learningPathSnapshot = await firestore
+            .collection('users')
+            .doc(userId)
+            .collection('learningPath')
+            .get();
+
+        if (learningPathSnapshot.docs.isNotEmpty) {
+          for (var doc in learningPathSnapshot.docs) {
+            topicScores[doc.id.replaceAll('_', ' ')] =
+                0; // Default score 0 if missing
+          }
+        } else {
+          setState(() {
+            _errorMessage =
+                'No topic scores available to generate a learning path.';
+            _isLoading = false;
+          });
+          return;
+        }
       }
 
-      for (var topic in widget.topicScores!.keys) {
-        int score = widget.topicScores![topic]!;
-        await _generateAndLoadSubtopics(topic, score);
+      // Load subtopics for each topic
+      for (var topic in topicScores.keys) {
+        await _generateAndLoadSubtopics(topic, topicScores[topic]!);
       }
 
       setState(() {
