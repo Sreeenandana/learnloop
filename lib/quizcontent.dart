@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-//import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-//import 'home.dart';
 import 'weekly_leaderboard.dart';
 import 'path.dart';
+import 'dart:async';
 
 class ChapterQuiz extends StatefulWidget {
   final String topic;
@@ -30,14 +29,22 @@ class _ChapterQuizState extends State<ChapterQuiz> {
   String? _feedbackMessage;
   bool _isAnswerCorrect = false;
   bool _hasAnswered = false;
+  late Stopwatch _stopwatch;
+  late Timer _timer;
 
-  final String _apiKey =
-      'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44'; // Replace with your actual API key
+  final String _apiKey = 'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44';
 
   @override
   void initState() {
     super.initState();
+    _stopwatch = Stopwatch();
     _fetchQuestions();
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchQuestions() async {
@@ -56,6 +63,10 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         setState(() {
           _questions = _parseQuestions(response.text!);
           _isLoading = false;
+          _stopwatch.start();
+          _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+            setState(() {});
+          });
         });
       } else {
         setState(() {
@@ -148,11 +159,12 @@ class _ChapterQuizState extends State<ChapterQuiz> {
 
   Future<void> _finishQuiz() async {
     widget.onQuizFinished();
+    _stopwatch.stop();
+    _timer.cancel();
 
     final firestore = FirebaseFirestore.instance;
 
     try {
-      // Update chapter quiz data
       await firestore
           .collection('users')
           .doc(widget.userId)
@@ -162,11 +174,11 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         'topic': widget.topic,
         'score': _score,
         'totalQuestions': _questions.length,
+        'totalTimeTakenMs': _stopwatch.elapsedMilliseconds,
         'modificationTime': DateTime.now().toIso8601String(),
         'status': 'completed'
       }, SetOptions(merge: true));
 
-      // Fetch all chapter scores to calculate total score
       final chapterQuizSnapshot = await firestore
           .collection('users')
           .doc(widget.userId)
@@ -176,22 +188,18 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       int totalScore = 0;
       for (var doc in chapterQuizSnapshot.docs) {
         final data = doc.data();
-        final dynamic score = data['score']; // Use dynamic to avoid type issues
+        final dynamic score = data['score'];
         if (score is num) {
-          // Ensure it's a number
-          totalScore += score.toInt(); // Safely cast to int
+          totalScore += score.toInt();
         }
       }
 
-      // Update totalScore in the user's document
       await firestore.collection('users').doc(widget.userId).set({
         'totalPoints': totalScore,
       }, SetOptions(merge: true));
 
-      // Update leaderboard after finishing the quiz
       await updateLeaderboard(widget.userId, widget.topic, _score);
 
-      // Mark the topic as completed in the learning path
       await firestore
           .collection('users')
           .doc(widget.userId)
@@ -204,7 +212,6 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       print("Error storing quiz score or updating totalPoints: $e");
     }
 
-    // Navigate to the learning path page
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -231,6 +238,14 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Text(
+              'Total Time: ${(_stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)} seconds',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue),
+            ),
+            const SizedBox(height: 10),
             Text(
               question['question'],
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
