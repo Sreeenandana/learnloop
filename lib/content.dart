@@ -1,12 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:learnloop/services/badges.dart';
 
 class SubtopicContentPage extends StatelessWidget {
   final String topic;
   final String subtopic;
   final VoidCallback onSubtopicFinished;
   final String userId;
+  final BadgeService _badgeService = BadgeService();
 
   SubtopicContentPage({
     super.key,
@@ -130,7 +132,7 @@ class SubtopicContentPage extends StatelessWidget {
     return resultSpans;
   }
 
-  Future<void> _updateSubtopicStatus(String topic, String subtopic) async {
+  Future<void> _updateSubtopicStatus(BuildContext context) async {
     try {
       final docRef = FirebaseFirestore.instance
           .collection('users')
@@ -150,27 +152,55 @@ class SubtopicContentPage extends StatelessWidget {
             return Map<String, dynamic>.from(s);
           }).toList();
 
+          int completedSubtopics = 0;
           // Find the subtopic and update status
           for (var sub in subtopics) {
             if (sub['name'] == subtopic) {
               sub['status'] = 'completed';
               sub['finishedAt'] =
                   DateTime.now().toIso8601String(); // Use timestamp as string
-              break;
+            }
+            if (sub['status'] == 'completed') {
+              completedSubtopics++;
             }
           }
 
           // Update only the modified array
           transaction.update(docRef, {'subtopics': subtopics});
+
+          int totalSubtopics = subtopics.length;
+          int halfSubtopics = (totalSubtopics / 2).ceil();
+
+          // Check for progress-based badges
+          if (completedSubtopics == halfSubtopics) {
+            await _badgeService.checkAndAwardBadges(userId, completedSubtopics, totalSubtopics);
+            _showBadgeEarnedDialog(context, "Halfway Explorer", "You've completed half of the subtopics!");
+          } else if (completedSubtopics == totalSubtopics) {
+            await _badgeService.checkAndAwardBadges(userId, completedSubtopics, totalSubtopics);
+            _showBadgeEarnedDialog(context, "Topic Mastery", "You've completed all subtopics in this topic!");
+          }
         }
       });
-
       print("Subtopic '$subtopic' marked as completed in Firestore.");
     } catch (e) {
       print("Error updating subtopic status: $e");
     }
   }
-
+  void _showBadgeEarnedDialog(BuildContext context, String badgeName, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("🎉 Badge Earned!"),
+        content: Text("$badgeName: $message"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -206,7 +236,7 @@ class SubtopicContentPage extends StatelessWidget {
                   ElevatedButton(
                     onPressed: () async {
                       try {
-                        await _updateSubtopicStatus(topic, subtopic);
+                        await _updateSubtopicStatus(context);
                         onSubtopicFinished();
 
                         ScaffoldMessenger.of(context).showSnackBar(
