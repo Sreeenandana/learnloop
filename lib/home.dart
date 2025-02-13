@@ -17,7 +17,7 @@ class _HomePageState extends State<HomePage> {
     HomeScreen(),
     LearningPathPage(),
     WeeklyLeaderboard(),
-    BadgesPage(),
+    //BadgesPage(),
     SettingsPage(),
   ];
 
@@ -36,7 +36,7 @@ class _HomePageState extends State<HomePage> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Learning Path'),
           BottomNavigationBarItem(icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.emoji_events), label: 'Badges'),
+         // BottomNavigationBarItem(icon: Icon(Icons.emoji_events), label: 'Badges'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
         ],
         currentIndex: _selectedIndex,
