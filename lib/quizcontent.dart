@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+//import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'home.dart';
-import 'path.dart'; // Import your LearningPathPage to navigate back
+//import 'home.dart';
+import 'weekly_leaderboard.dart';
+import 'path.dart';
 
 class ChapterQuiz extends StatefulWidget {
   final String topic;
   final VoidCallback onQuizFinished;
-  final String userId; // Pass userId to the constructor
+  final String userId;
 
   const ChapterQuiz({
     super.key,
     required this.topic,
     required this.onQuizFinished,
-    required this.userId, // Receive userId as parameter
+    required this.userId,
   });
 
   @override
@@ -26,7 +27,10 @@ class _ChapterQuizState extends State<ChapterQuiz> {
   int _currentQuestionIndex = 0;
   int _score = 0;
   bool _isLoading = true;
-  final Map<String, int> _topicScores = {};
+  String? _feedbackMessage;
+  bool _isAnswerCorrect = false;
+  bool _hasAnswered = false;
+
   final String _apiKey =
       'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44'; // Replace with your actual API key
 
@@ -64,14 +68,13 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         _isLoading = false;
         _questions = [];
       });
-      _showError('Error fetching questions: $e');
     }
   }
 
   String _generatePromptForQuiz(String topic) {
     return "Generate 10 multiple choice questions (MCQs) about Java, on topic $topic. "
         "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
-        "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. "
+        "'ans:' for the correct answer, and 'top:' for the topic. Separate each question set with a newline. Give only 4 options."
         "Do not provide any other message or use any special characters unless necessary.";
   }
 
@@ -84,9 +87,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       line = line.trim();
       if (line.startsWith('qstn:')) {
         if (currentQuestion.isNotEmpty) {
-          if (_isValidQuestion(currentQuestion)) {
-            parsedQuestions.add(_buildQuestionMap(currentQuestion));
-          }
+          parsedQuestions.add(_buildQuestionMap(currentQuestion));
           currentQuestion.clear();
         }
         currentQuestion['qstn'] = line.substring(5).trim();
@@ -99,18 +100,11 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       }
     }
 
-    if (_isValidQuestion(currentQuestion)) {
+    if (currentQuestion.isNotEmpty) {
       parsedQuestions.add(_buildQuestionMap(currentQuestion));
     }
 
     return parsedQuestions;
-  }
-
-  bool _isValidQuestion(Map<String, String> question) {
-    return question.containsKey('qstn') &&
-        question.containsKey('opt') &&
-        question.containsKey('ans') &&
-        question.containsKey('top');
   }
 
   Map<String, dynamic> _buildQuestionMap(Map<String, String> question) {
@@ -123,44 +117,29 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     };
   }
 
-  void _showError(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Error'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _submitAnswer(String selectedAnswer) {
     final question = _questions[_currentQuestionIndex];
     final correctAnswer = question['correct_answer'];
-    final topic = question['topic'] ?? 'General';
 
-    if (correctAnswer == null) {
-      _showError('Error: Missing data for correct_answer.');
-      return;
-    }
+    setState(() {
+      _hasAnswered = true;
+      _isAnswerCorrect = (selectedAnswer == correctAnswer);
+      _feedbackMessage = _isAnswerCorrect
+          ? 'Correct!'
+          : 'Incorrect. The correct answer is "$correctAnswer".';
 
-    if (!_topicScores.containsKey(topic)) {
-      _topicScores[topic] = 0;
-    }
+      if (_isAnswerCorrect) {
+        _score++;
+      }
+    });
+  }
 
-    if (selectedAnswer == correctAnswer) {
-      _topicScores[topic] = _topicScores[topic]! + 1;
-      _score++;
-    }
-
+  void _nextQuestion() {
     if (_currentQuestionIndex < _questions.length - 1) {
       setState(() {
         _currentQuestionIndex++;
+        _hasAnswered = false;
+        _feedbackMessage = null;
       });
     } else {
       _finishQuiz();
@@ -170,48 +149,67 @@ class _ChapterQuizState extends State<ChapterQuiz> {
   Future<void> _finishQuiz() async {
     widget.onQuizFinished();
 
-    final userId = widget.userId; // Use the passed userId
     final firestore = FirebaseFirestore.instance;
 
     try {
-      // Store the score in Firestore under the user's document
-      await firestore.collection('users').doc(userId).set(
-        {
-          'quizScores': FieldValue.arrayUnion([
-            // Store in the main user document
-            {
-              'topic': widget.topic,
-              'score': _score,
-              'totalQuestions': _questions.length,
-              //'timestamp': FieldValue.serverTimestamp(),
-            }
-          ]),
-        },
-        SetOptions(merge: true), // Use merge to avoid overwriting other data
-      );
-
-      // Mark the quiz as completed in learningPath document
+      // Update chapter quiz data
       await firestore
           .collection('users')
-          .doc(userId)
+          .doc(widget.userId)
+          .collection('chapterQuiz')
+          .doc(widget.topic)
+          .set({
+        'topic': widget.topic,
+        'score': _score,
+        'totalQuestions': _questions.length,
+        'modificationTime': DateTime.now().toIso8601String(),
+        'status': 'completed'
+      }, SetOptions(merge: true));
+
+      // Fetch all chapter scores to calculate total score
+      final chapterQuizSnapshot = await firestore
+          .collection('users')
+          .doc(widget.userId)
+          .collection('chapterQuiz')
+          .get();
+
+      int totalScore = 0;
+      for (var doc in chapterQuizSnapshot.docs) {
+        final data = doc.data();
+        final dynamic score = data['score']; // Use dynamic to avoid type issues
+        if (score is num) {
+          // Ensure it's a number
+          totalScore += score.toInt(); // Safely cast to int
+        }
+      }
+
+      // Update totalScore in the user's document
+      await firestore.collection('users').doc(widget.userId).set({
+        'totalPoints': totalScore,
+      }, SetOptions(merge: true));
+
+      // Update leaderboard after finishing the quiz
+      await updateLeaderboard(widget.userId, widget.topic, _score);
+
+      // Mark the topic as completed in the learning path
+      await firestore
+          .collection('users')
+          .doc(widget.userId)
           .collection('learningPath')
           .doc(widget.topic)
           .update({
-        'completed': true, // Mark as completed
-        //'timestamp': FieldValue.serverTimestamp(),
+        'completed': true,
       });
-
-      print("Quiz score stored and marked as completed.");
     } catch (e) {
-      print("Error storing quiz score: $e");
+      print("Error storing quiz score or updating totalPoints: $e");
     }
 
-    // Optionally, navigate back to the LearningPathPage
+    // Navigate to the learning path page
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-          builder: (context) =>
-              LearningPathPage()), // Pass userId back to the LearningPathPage
+        builder: (context) => const LearningPathPage(),
+      ),
     );
   }
 
@@ -225,6 +223,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     }
 
     final question = _questions[_currentQuestionIndex];
+
     return Scaffold(
       appBar: AppBar(title: Text('Question ${_currentQuestionIndex + 1}')),
       body: Padding(
@@ -244,12 +243,35 @@ class _ChapterQuizState extends State<ChapterQuiz> {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10.0),
                   child: ElevatedButton(
-                    onPressed: () => _submitAnswer(option),
+                    onPressed:
+                        _hasAnswered ? null : () => _submitAnswer(option),
                     child: Text(option),
                   ),
                 );
               },
             ),
+            if (_hasAnswered)
+              Column(
+                children: [
+                  Text(
+                    _feedbackMessage ?? '',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _isAnswerCorrect ? Colors.green : Colors.red,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _nextQuestion,
+                    child: Text(
+                      _currentQuestionIndex < _questions.length - 1
+                          ? 'Next Question'
+                          : 'Finish Quiz',
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
