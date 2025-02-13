@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/material.dart';
 import 'home.dart';
-import 'initial.dart';
+import 'initial.dart'; 
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -260,7 +260,7 @@ class SignUpPageState extends State<SignUpPage> {
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => QuizPage()),
+            MaterialPageRoute(builder: (context) =>  QuizPage()),
           );
         }
       }
