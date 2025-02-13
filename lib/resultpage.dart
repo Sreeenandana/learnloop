@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'path.dart'; // Import your LearningPathPage
+import 'path.dart';
 
 class ResultPage extends StatelessWidget {
   final int score;
@@ -27,54 +27,112 @@ class ResultPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Quiz Results')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              "Your Score: $score / $total",
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "Topic-wise Scores:",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: ListView.builder(
-                itemCount: topicScores.length,
-                itemBuilder: (context, index) {
-                  String topic = topicScores.keys.elementAt(index);
-                  int topicScore = topicScores[topic] ?? 0;
-                  return ListTile(
-                    title: Text(topic),
-                    trailing: Text("$topicScore"),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.purpleAccent, Colors.deepPurple],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Card(
+                elevation: 6,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      const Text(
+                        "Your Score",
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        "$score / $total",
+                        style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.deepPurple),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "Topic-wise Scores:",
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: topicScores.length,
+                  itemBuilder: (context, index) {
+                    String topic = topicScores.keys.elementAt(index);
+                    int topicScore = topicScores[topic] ?? 0;
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      elevation: 4,
+                      child: ListTile(
+                        leading: Icon(Icons.book,
+                            color: topicScore > 0 ? Colors.green : Colors.red),
+                        title: Text(topic,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w600)),
+                        trailing: Text("$topicScore",
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30)),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  backgroundColor: Colors.white,
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          LearningPathPage(topicScores: topicScores),
+                    ),
                   );
                 },
+                child: const Text("Go to Learning Path",
+                    style: TextStyle(color: Colors.deepPurple, fontSize: 16)),
               ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        LearningPathPage(topicScores: topicScores),
-                  ),
-                );
-              },
-              child: const Text("Go to Learning Path"),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () => _showQuizReviewDialog(context),
-              child: const Text("Review Answers"),
-            ),
-          ],
+              const SizedBox(height: 10),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30)),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  backgroundColor: Colors.white,
+                ),
+                onPressed: () => _showQuizReviewDialog(context),
+                child: const Text("Review Answers",
+                    style: TextStyle(color: Colors.deepPurple, fontSize: 16)),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -88,7 +146,7 @@ class ResultPage extends StatelessWidget {
           title: const Text("Quiz Review"),
           content: SizedBox(
             width: double.maxFinite,
-            height: 400, // Adjust height as needed
+            height: 400,
             child: ListView.builder(
               itemCount: questions.length,
               itemBuilder: (context, index) {
@@ -114,15 +172,6 @@ class ResultPage extends StatelessWidget {
                         Text("Correct Answer: $correctAnswer",
                             style:
                                 const TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 5),
-                        Text(
-                          isCorrect
-                              ? "✔ Well done!"
-                              : "❌ Try reviewing this topic.",
-                          style: TextStyle(
-                              color: isCorrect ? Colors.green : Colors.red,
-                              fontWeight: FontWeight.w500),
-                        ),
                       ],
                     ),
                   ),
@@ -151,8 +200,6 @@ class ResultPage extends StatelessWidget {
         'topic_scores': topicScores,
         'timestamp': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-
-      print("Results saved successfully!");
     } catch (e) {
       print("Error saving results: $e");
     }
