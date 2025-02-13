@@ -73,41 +73,87 @@ class _QuizPageState extends State<QuizPage> {
 
   Widget _buildTopicSelectionUI() {
     return Scaffold(
-      appBar: AppBar(title: const Text('Select Topics')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Select topics for your quiz:",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: ListView(
-                children: _topics.map((topic) {
-                  return CheckboxListTile(
-                    title: Text(topic),
-                    value: _selectedTopics.contains(topic),
-                    onChanged: (bool? selected) {
-                      setState(() {
-                        if (selected == true) {
-                          _selectedTopics.add(topic);
-                        } else {
-                          _selectedTopics.remove(topic);
-                        }
-                      });
-                    },
-                  );
-                }).toList(),
+      appBar: AppBar(
+        title: const Text('Select Topics'),
+        backgroundColor: Color(0xFFdda0dd),
+        elevation: 0,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFdda0dd), Colors.purple],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Select topics for your quiz:",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
-            ),
-            ElevatedButton(
-              onPressed: _selectedTopics.isNotEmpty ? _startQuiz : null,
-              child: const Text("Start Quiz"),
-            ),
-          ],
+              const SizedBox(height: 10),
+
+              Expanded(
+                child: ListView(
+                  children: _topics.map((topic) {
+                    return Card(
+                      elevation: 4,
+                      margin: const EdgeInsets.symmetric(vertical: 6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: CheckboxListTile(
+                        title: Text(
+                          topic,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        value: _selectedTopics.contains(topic),
+                        activeColor: Color(0xFFdda0dd),
+                        checkColor: Colors.white,
+                        onChanged: (bool? selected) {
+                          setState(() {
+                            if (selected == true) {
+                              _selectedTopics.add(topic);
+                            } else {
+                              _selectedTopics.remove(topic);
+                            }
+                          });
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+
+              // Start Quiz Button
+              Align(
+                alignment: Alignment.center,
+                child: ElevatedButton(
+                  onPressed: _selectedTopics.isNotEmpty ? _startQuiz : null,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 30, vertical: 14),
+                    backgroundColor: Colors.white,
+                    foregroundColor: Color(0xFFdda0dd),
+                    textStyle: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text("Start Quiz"),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -235,36 +281,82 @@ class _QuizPageState extends State<QuizPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Progress Bar
+            LinearProgressIndicator(
+              value: (_currentQuestionIndex + 1) / _questions.length,
+              backgroundColor: Colors.grey[300],
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(Color(0xFFdda0dd)),
+            ),
+            const SizedBox(height: 20),
+
+            // Question Number
             Text(
-              "Question ${_currentQuestionIndex + 1}/${_questions.length}",
+              "Question ${_currentQuestionIndex + 1} of ${_questions.length}",
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
-            Text(
-              question['question'],
-              style: const TextStyle(fontSize: 16),
+
+            // Question Card
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  question['question'],
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
             ),
             const SizedBox(height: 20),
+
+            // Answer Options
             Column(
               children: (question['options'] as List<String>).map((option) {
-                return RadioListTile<String>(
-                  title: Text(option),
-                  value: option,
-                  groupValue: _selectedAnswer,
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedAnswer = value;
-                    });
-                  },
+                return Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: RadioListTile<String>(
+                    title: Text(option),
+                    value: option,
+                    groupValue: _selectedAnswer,
+                    activeColor: Color(0xFFdda0dd),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedAnswer = value;
+                      });
+                    },
+                  ),
                 );
               }).toList(),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _selectedAnswer == null ? null : _submitAnswer,
-              child: Text(_currentQuestionIndex < _questions.length - 1
-                  ? "Next"
-                  : "Finish Quiz"),
+
+            // Next/Finish Button
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton(
+                onPressed: _selectedAnswer == null ? null : _submitAnswer,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFdda0dd),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  _currentQuestionIndex < _questions.length - 1
+                      ? "Next"
+                      : "Finish Quiz",
+                  style: const TextStyle(fontSize: 16, color: Colors.white),
+                ),
+              ),
             ),
           ],
         ),

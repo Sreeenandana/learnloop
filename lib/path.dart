@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'content.dart'; // Make sure this exists
+import 'content.dart'; // Ensure these files exist
 import 'quizcontent.dart';
 import 'resultpage.dart';
 
@@ -30,9 +30,7 @@ class _LearningPathPageState extends State<LearningPathPage> {
   }
 
   Future<void> _generateLearningPath() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       final FirebaseFirestore firestore = FirebaseFirestore.instance;
@@ -45,9 +43,7 @@ class _LearningPathPageState extends State<LearningPathPage> {
         return;
       }
 
-      // If topicScores is not provided, try to fetch from Firestore
       Map<String, int> topicScores = widget.topicScores ?? {};
-
       if (topicScores.isEmpty) {
         final learningPathSnapshot = await firestore
             .collection('users')
@@ -57,8 +53,7 @@ class _LearningPathPageState extends State<LearningPathPage> {
 
         if (learningPathSnapshot.docs.isNotEmpty) {
           for (var doc in learningPathSnapshot.docs) {
-            topicScores[doc.id.replaceAll('_', ' ')] =
-                0; // Default score 0 if missing
+            topicScores[doc.id.replaceAll('_', ' ')] = 0;
           }
         } else {
           setState(() {
@@ -70,14 +65,11 @@ class _LearningPathPageState extends State<LearningPathPage> {
         }
       }
 
-      // Load subtopics for each topic
       for (var topic in topicScores.keys) {
         await _generateAndLoadSubtopics(topic, topicScores[topic]!);
       }
 
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     } catch (e) {
       setState(() {
         _errorMessage = 'Error generating learning path: $e';
@@ -89,38 +81,29 @@ class _LearningPathPageState extends State<LearningPathPage> {
   Future<void> _generateAndLoadSubtopics(String topic, int score) async {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
     final userId = _auth.currentUser?.uid;
-
-    if (userId == null) return;
-    if (_subtopics.containsKey(topic) && _subtopics[topic]!.isNotEmpty) return;
+    if (userId == null ||
+        (_subtopics.containsKey(topic) && _subtopics[topic]!.isNotEmpty))
+      return;
 
     try {
       int subtopicCount = score < 40 ? 7 : (score < 70 ? 5 : 3);
-
       final prompt = "Generate $subtopicCount subtopics for the topic $topic. "
           "Give only subtopic names, no descriptions, no numbering."
-          "lastly also give a quiz title for the given topic. it should be'quiz:$topic.' ";
+          "Lastly also give a quiz title for the given topic as 'quiz:$topic'.";
 
-      final model = GenerativeModel(
-        model: 'gemini-1.5-flash',
-        apiKey: _apiKey,
-      );
-
-      final content = [Content.text(prompt)];
-      final response = await model.generateContent(content);
+      final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: _apiKey);
+      final response = await model.generateContent([Content.text(prompt)]);
 
       if (response.text != null) {
         final subtopics = _parseSubtopics(response.text!);
 
         if (subtopics.isEmpty) {
-          setState(() {
-            _errorMessage = 'Generated subtopics for $topic are empty.';
-          });
+          setState(() =>
+              _errorMessage = 'Generated subtopics for $topic are empty.');
           return;
         }
 
-        setState(() {
-          _subtopics[topic] = subtopics;
-        });
+        setState(() => _subtopics[topic] = subtopics);
 
         await firestore
             .collection('users')
@@ -130,9 +113,7 @@ class _LearningPathPageState extends State<LearningPathPage> {
             .set({'subtopics': subtopics}, SetOptions(merge: true));
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Error generating subtopics: $e';
-      });
+      setState(() => _errorMessage = 'Error generating subtopics: $e');
     }
   }
 
@@ -140,16 +121,14 @@ class _LearningPathPageState extends State<LearningPathPage> {
     return responseText
         .split('\n')
         .where((line) => line.trim().isNotEmpty)
-        .map((subtopic) => {'name': subtopic}) // Default status
+        .map((subtopic) => {'name': subtopic, 'status': 'pending'})
         .toList();
   }
 
   void _navigateToContent(String topic, String subtopic) {
     final userId = _auth.currentUser?.uid;
     if (userId == null) {
-      setState(() {
-        _errorMessage = 'User not logged in.';
-      });
+      setState(() => _errorMessage = 'User not logged in.');
       return;
     }
 
@@ -159,22 +138,17 @@ class _LearningPathPageState extends State<LearningPathPage> {
     int currentIndex = subtopics.indexWhere((item) => item['name'] == subtopic);
 
     if (subtopic.toLowerCase().startsWith("quiz:")) {
-      // Navigate to QuizContentPage
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => ChapterQuiz(
             topic: topic,
             userId: userId,
-            onQuizFinished: () {
-              // Handle quiz completion, e.g., navigate back
-              Navigator.pop(context);
-            },
+            onQuizFinished: () => Navigator.pop(context),
           ),
         ),
       );
     } else {
-      // Navigate to SubtopicContentPage
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -183,16 +157,11 @@ class _LearningPathPageState extends State<LearningPathPage> {
             subtopic: subtopic,
             userId: userId,
             onSubtopicFinished: () {
-              setState(() {
-                // Mark current subtopic as complete
-                subtopics[currentIndex]['status'] = 'complete';
-              });
-
-              // Move to next subtopic if available
+              setState(() => subtopics[currentIndex]['status'] = 'complete');
               if (currentIndex + 1 < subtopics.length) {
                 _navigateToContent(topic, subtopics[currentIndex + 1]['name']);
               } else {
-                Navigator.pop(context); // Go back if no more subtopics
+                Navigator.pop(context);
               }
             },
           ),
@@ -203,50 +172,65 @@ class _LearningPathPageState extends State<LearningPathPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Learning Path')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_errorMessage.isNotEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Learning Path')),
-        body: Center(
-          child: Text(_errorMessage, style: const TextStyle(color: Colors.red)),
-        ),
-      );
-    }
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Learning Path')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ListView(
-          children: _subtopics.keys.map((topic) {
-            return Card(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              child: ExpansionTile(
-                title: Text(topic,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold)),
-                children: _subtopics[topic]!.map((subtopic) {
-                  return ListTile(
-                    title: Text(subtopic['name']),
-                    trailing: subtopic['status'] == 'complete'
-                        ? const Icon(Icons.check_circle, color: Colors.green)
-                        : null, // Show tick only if complete
-                    onTap: () => _navigateToContent(topic, subtopic['name']),
-                  );
-                }).toList(),
-              ),
-            );
-          }).toList(),
-        ),
+      appBar: AppBar(
+        title: const Text('Learning Path'),
+        backgroundColor: const Color(0xFFdda0dd),
+        elevation: 0,
       ),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: const Color(0xFFdda0dd)))
+          : _errorMessage.isNotEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      _errorMessage,
+                      style: const TextStyle(color: Colors.red, fontSize: 16),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              : Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.white, Color(0xFFF8F8F8)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                  child: ListView(
+                    padding: const EdgeInsets.all(16.0),
+                    children: _subtopics.keys.map((topic) {
+                      bool isCompleted = _subtopics[topic]!
+                          .every((sub) => sub['status'] == 'complete');
+
+                      return Card(
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ListTile(
+                          title: Text(
+                            topic,
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w600),
+                          ),
+                          leading: Icon(
+                              isCompleted ? Icons.check_circle : Icons.book,
+                              color: isCompleted
+                                  ? Colors.green
+                                  : Colors.purpleAccent),
+                          trailing: const Icon(Icons.arrow_forward_ios,
+                              color: const Color(0xFFdda0dd)),
+                          onTap: () => _navigateToContent(
+                              topic, _subtopics[topic]!.first['name']),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
     );
   }
 }
