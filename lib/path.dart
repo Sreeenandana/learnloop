@@ -2,7 +2,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+<<<<<<< Updated upstream
 import 'content.dart'; // Ensure these files exist
+=======
+import 'content.dart'; // Ensure this exists
+>>>>>>> Stashed changes
 import 'quizcontent.dart';
 import 'resultpage.dart';
 
@@ -21,19 +25,26 @@ class _LearningPathPageState extends State<LearningPathPage> {
   final Map<String, List<Map<String, dynamic>>> _subtopics = {};
 
   final _auth = FirebaseAuth.instance;
+  final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final String _apiKey = 'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44';
 
   @override
   void initState() {
     super.initState();
-    _generateLearningPath();
+    _fetchLearningPath();
   }
 
+<<<<<<< Updated upstream
   Future<void> _generateLearningPath() async {
     setState(() => _isLoading = true);
+=======
+  Future<void> _fetchLearningPath() async {
+    setState(() {
+      _isLoading = true;
+    });
+>>>>>>> Stashed changes
 
     try {
-      final FirebaseFirestore firestore = FirebaseFirestore.instance;
       final userId = _auth.currentUser?.uid;
       if (userId == null) {
         setState(() {
@@ -65,31 +76,64 @@ class _LearningPathPageState extends State<LearningPathPage> {
         }
       }
 
+<<<<<<< Updated upstream
+=======
+      // Fetch existing learning path from Firestore
+>>>>>>> Stashed changes
       for (var topic in topicScores.keys) {
-        await _generateAndLoadSubtopics(topic, topicScores[topic]!);
+        await _loadSubtopicsFromFirestore(topic, topicScores[topic]!);
       }
 
       setState(() => _isLoading = false);
     } catch (e) {
       setState(() {
-        _errorMessage = 'Error generating learning path: $e';
+        _errorMessage = 'Error fetching learning path: $e';
         _isLoading = false;
       });
     }
   }
 
-  Future<void> _generateAndLoadSubtopics(String topic, int score) async {
-    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+  Future<void> _loadSubtopicsFromFirestore(String topic, int score) async {
     final userId = _auth.currentUser?.uid;
+    if (userId == null) return;
+
+    final docRef = firestore
+        .collection('users')
+        .doc(userId)
+        .collection('learningPath')
+        .doc(topic);
+
+    final docSnapshot = await docRef.get();
+
+    if (docSnapshot.exists && docSnapshot.data()!.containsKey('subtopics')) {
+      setState(() {
+        _subtopics[topic] = List<Map<String, dynamic>>.from(
+            docSnapshot.data()!['subtopics'] ?? []);
+      });
+    } else {
+      await _generateAndStoreSubtopics(topic, score);
+    }
+  }
+
+  Future<void> _generateAndStoreSubtopics(String topic, int score) async {
+    final userId = _auth.currentUser?.uid;
+<<<<<<< Updated upstream
     if (userId == null ||
         (_subtopics.containsKey(topic) && _subtopics[topic]!.isNotEmpty))
       return;
+=======
+    if (userId == null) return;
+>>>>>>> Stashed changes
 
     try {
       int subtopicCount = score < 40 ? 7 : (score < 70 ? 5 : 3);
       final prompt = "Generate $subtopicCount subtopics for the topic $topic. "
           "Give only subtopic names, no descriptions, no numbering."
+<<<<<<< Updated upstream
           "Lastly also give a quiz title for the given topic as 'quiz:$topic'.";
+=======
+          "Lastly, also provide a quiz title in the format 'Quiz: $topic'.";
+>>>>>>> Stashed changes
 
       final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: _apiKey);
       final response = await model.generateContent([Content.text(prompt)]);
@@ -103,7 +147,17 @@ class _LearningPathPageState extends State<LearningPathPage> {
           return;
         }
 
+<<<<<<< Updated upstream
         setState(() => _subtopics[topic] = subtopics);
+=======
+        for (var subtopic in subtopics) {
+          subtopic['status'] = 'pending'; // Default status
+        }
+
+        setState(() {
+          _subtopics[topic] = subtopics;
+        });
+>>>>>>> Stashed changes
 
         await firestore
             .collection('users')
@@ -121,7 +175,11 @@ class _LearningPathPageState extends State<LearningPathPage> {
     return responseText
         .split('\n')
         .where((line) => line.trim().isNotEmpty)
+<<<<<<< Updated upstream
         .map((subtopic) => {'name': subtopic, 'status': 'pending'})
+=======
+        .map((subtopic) => {'name': subtopic.trim(), 'status': 'pending'})
+>>>>>>> Stashed changes
         .toList();
   }
 
@@ -144,7 +202,13 @@ class _LearningPathPageState extends State<LearningPathPage> {
           builder: (context) => ChapterQuiz(
             topic: topic,
             userId: userId,
+<<<<<<< Updated upstream
             onQuizFinished: () => Navigator.pop(context),
+=======
+            onQuizFinished: () {
+              Navigator.pop(context);
+            },
+>>>>>>> Stashed changes
           ),
         ),
       );
@@ -156,8 +220,23 @@ class _LearningPathPageState extends State<LearningPathPage> {
             topic: topic,
             subtopic: subtopic,
             userId: userId,
+<<<<<<< Updated upstream
             onSubtopicFinished: () {
               setState(() => subtopics[currentIndex]['status'] = 'complete');
+=======
+            onSubtopicFinished: () async {
+              setState(() {
+                subtopics[currentIndex]['status'] = 'complete';
+              });
+
+              await firestore
+                  .collection('users')
+                  .doc(userId)
+                  .collection('learningPath')
+                  .doc(topic)
+                  .update({'subtopics': subtopics});
+
+>>>>>>> Stashed changes
               if (currentIndex + 1 < subtopics.length) {
                 _navigateToContent(topic, subtopics[currentIndex + 1]['name']);
               } else {
@@ -173,10 +252,39 @@ class _LearningPathPageState extends State<LearningPathPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+<<<<<<< Updated upstream
       appBar: AppBar(
         title: const Text('Learning Path'),
         backgroundColor: const Color(0xFFdda0dd),
         elevation: 0,
+=======
+      appBar: AppBar(title: const Text('Learning Path')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: ListView(
+          children: _subtopics.keys.map((topic) {
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              child: ExpansionTile(
+                title: Text(topic,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+                children: _subtopics[topic]!.map((subtopic) {
+                  return ListTile(
+                    title: Text(subtopic['name']),
+                    trailing: subtopic['status'] == 'complete'
+                        ? const Icon(Icons.check_circle, color: Colors.green)
+                        : null,
+                    onTap: () => _navigateToContent(topic, subtopic['name']),
+                  );
+                }).toList(),
+              ),
+            );
+          }).toList(),
+        ),
+>>>>>>> Stashed changes
       ),
       body: _isLoading
           ? const Center(
