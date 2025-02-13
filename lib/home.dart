@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:learnloop/settings.dart';
 import 'path.dart';
 import 'weekly_leaderboard.dart';
+import 'badges.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,7 +18,7 @@ class _HomePageState extends State<HomePage> {
     HomeScreen(),
     LearningPathPage(),
     WeeklyLeaderboard(),
-    //BadgesPage(),
+    BadgesPage(),
     SettingsPage(),
   ];
 
@@ -34,10 +35,14 @@ class _HomePageState extends State<HomePage> {
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Learning Path'),
-          BottomNavigationBarItem(icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
-         // BottomNavigationBarItem(icon: Icon(Icons.emoji_events), label: 'Badges'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.school), label: 'Learning Path'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.emoji_events), label: 'Badges'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.settings), label: 'Settings'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.deepPurple,
@@ -92,7 +97,8 @@ class HomeScreen extends StatelessWidget {
                     _buildFeatureCard("Completed", Icons.check_circle),
                     _buildFeatureCard("In Progress", Icons.sync),
                     _buildFeatureCard("To Do", Icons.list),
-                    _buildFeatureCard("Quizzes Completed", Icons.assignment_turned_in),
+                    _buildFeatureCard(
+                        "Quizzes Completed", Icons.assignment_turned_in),
                   ],
                 ),
               ),
@@ -112,10 +118,10 @@ class HomeScreen extends StatelessWidget {
         children: [
           Icon(icon, size: 40, color: Colors.purpleAccent),
           SizedBox(height: 10),
-          Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(title,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
 }
-

@@ -196,7 +196,7 @@ class _ProfilePageState extends State<ProfilePage> {
           await _firestore
               .collection('users')
               .doc(user.uid)
-              .update({'username': _usernameController.text});
+              .update({'Username': _usernameController.text});
 
           setState(() {
             _username = _usernameController.text;

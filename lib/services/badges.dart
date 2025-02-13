@@ -4,75 +4,41 @@ import 'package:flutter/material.dart';
 class BadgeService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Initialize the badge for first subtopic completion
-  Future<void> createBadge() async {
-    final badge = {
-      "id": "first_subtopic_completion",
-      "name": "First Subtopic Master",
-      "description": "Completed the first subtopic in the first chapter"
-    };
+  Future<void> awardQuizBadge(
+      BuildContext context, String userId, String badgeId) async {
+    final userBadgesRef =
+        _firestore.collection('users').doc(userId).collection('badges');
 
-    await _firestore
-        .collection('badges')
-        .doc("first_subtopic_completion")
-        .set(badge);
-    print("✅ First Subtopic Completion badge initialized!");
+    // Check if the badge already exists
+    final doc = await userBadgesRef.doc(badgeId).get();
+    if (doc.exists) return; // Avoid awarding the same badge multiple times
+
+    // Store badge in Firestore
+    await userBadgesRef.doc(badgeId).set({
+      'id': badgeId,
+      'earnedAt': Timestamp.now(),
+    }, SetOptions(merge: true));
+
+    // Show popup notification
+    _showBadgePopup(context, badgeId);
   }
 
-  // Check and award the badge when any subtopic is completed first
-  Future<void> checkAndAwardBadge(
-      BuildContext context, String userId, VoidCallback onContinue) async {
-    try {
-      print("🔍 Checking badge for user: $userId");
-      final userRef = _firestore.collection('users').doc(userId);
-      final learningPathRef = userRef.collection('learningPath');
-      final badgesRef = userRef.collection('badges');
-
-      // Force Firestore to get the latest data
-      final learningPathSnapshot =
-          await learningPathRef.get(const GetOptions(source: Source.server));
-
-      // Check if the user already has the badge
-      final badgeDoc = await badgesRef.doc("first_subtopic_completion").get();
-      if (badgeDoc.exists) {
-        print("🔹 Badge already earned.");
-        return;
-      }
-
-      bool isFirstSubtopicCompleted = false;
-      String completedSubtopic = "";
-
-      print("📂 Checking user's learning path...");
-      for (var chapter in learningPathSnapshot.docs) {
-        List<dynamic> chapterSubtopics = chapter.data()['subtopics'] ?? [];
-        print(
-            "📖 Checking chapter: ${chapter.id}, Subtopics: ${chapterSubtopics.length}");
-        for (var sub in chapterSubtopics) {
-          print(
-              "🔍 Subtopic: ${sub['name']}, Status: ${sub['status'] ?? 'null'}");
-          if (sub.containsKey('status') && sub['status'] == 'completed') {
-            isFirstSubtopicCompleted = true;
-            completedSubtopic = sub['name'];
-            break;
-          }
-        }
-        if (isFirstSubtopicCompleted) break;
-      }
-
-      if (isFirstSubtopicCompleted) {
-        print("🏆 First completed subtopic detected: $completedSubtopic");
-        await badgesRef.doc("first_subtopic_completion").set({
-          "id": "first_subtopic_completion",
-          "earnedAt": FieldValue.serverTimestamp(),
-        });
-        _showCongratulations(context, onContinue);
-        print("🏅 First Subtopic Completion badge awarded!");
-      } else {
-        print("❌ No subtopics completed yet.");
-      }
-    } catch (e) {
-      print("⚠️ Error checking badge: $e");
-    }
+  void _showBadgePopup(BuildContext context, String badgeId) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("🎉 Badge Earned!"),
+          content: Text("Congratulations! You earned the '$badgeId' badge."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("OK"),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> awardBadge(BuildContext context, String userId, String badgeId,
