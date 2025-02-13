@@ -1,50 +1,40 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'dart:convert';
+import 'package:learnloop/services/badges.dart';
 
 class SubtopicContentPage extends StatelessWidget {
   final String topic;
   final String subtopic;
   final VoidCallback onSubtopicFinished;
-  final String
-      userId; // Assuming you have a userId to identify the user in Firestore
+  final String userId;
+  final BadgeService _badgeService = BadgeService();
 
   SubtopicContentPage({
     super.key,
     required this.topic,
     required this.subtopic,
     required this.onSubtopicFinished,
-    required this.userId, // Pass the userId
+    required this.userId,
   });
 
-  // Regex patterns for bold, italic, code blocks, and bullet points
-  final RegExp regexBold =
-      RegExp(r'\*(.*?)\*'); // Bold text (starts and stops at immediate *)
-  final RegExp regexItalics = RegExp(r'#(.*?)#'); // Italic text (enclosed by #)
-  final RegExp regexCode =
-      RegExp(r'```(.*?)```', dotAll: true); // Code blocks (enclosed by ```)
-  final RegExp regexBullet = RegExp(r'^\$(.*)',
-      multiLine: true); // Bullet points (lines starting with $)
+  final RegExp regexBold = RegExp(r'\*(.*?)\*');
+  final RegExp regexItalics = RegExp(r'#(.*?)#');
+  final RegExp regexCode = RegExp(r'```(.*?)```', dotAll: true);
+  final RegExp regexBullet = RegExp(r'^\$(.*)', multiLine: true);
 
-  // Google Generative AI API Key
-  final String _apiKey =
-      'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44'; // Replace with your actual API key
+  final String _apiKey = 'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44';
 
-  // Fetch content for subtopic using Google Generative AI
   Future<String> _fetchSubtopicContent(String subtopic) async {
     try {
-      print("in cp");
-      // Initialize the Generative Model
       final model = GenerativeModel(
-        model: 'gemini-1.5-flash', // Replace with your preferred model
+        model: 'gemini-1.5-flash',
         apiKey: _apiKey,
       );
 
-      // Create a prompt to generate content for the subtopic
-      final prompt = "Generate detailed content for the subtopic: $subtopic.";
+      final prompt =
+          "Generate detailed content for the subtopic: $subtopic in context of Java";
 
-      // Generate content using the AI model
       final content = [Content.text(prompt)];
       final response = await model.generateContent(content);
 
@@ -58,53 +48,45 @@ class SubtopicContentPage extends StatelessWidget {
     }
   }
 
-  // Format content to handle bold text, italics, code blocks, and bullet points
   TextSpan _formatContent(String content) {
     List<TextSpan> textSpans = [];
     int lastEnd = 0;
 
-    // Process code blocks
     final codeMatches = regexCode.allMatches(content);
     for (var match in codeMatches) {
       if (match.start > lastEnd) {
         textSpans.add(TextSpan(text: content.substring(lastEnd, match.start)));
       }
       textSpans.add(TextSpan(
-        text: match.group(1), // Code content inside triple backticks
+        text: match.group(1),
         style: const TextStyle(
           fontFamily: 'monospace',
-          backgroundColor:
-              Color.fromARGB(255, 44, 4, 4), // Light background for code block
-          color: Colors.black, // Set color to black for better visibility
+          backgroundColor: Color.fromARGB(255, 230, 230, 230),
+          color: Colors.black,
         ),
       ));
       lastEnd = match.end;
     }
 
-    // Add remaining plain text
     if (lastEnd < content.length) {
       textSpans.add(TextSpan(text: content.substring(lastEnd)));
     }
 
-    // Now, handle bold, italic text, and bullet points
     List<TextSpan> finalTextSpans = [];
     for (var span in textSpans) {
       finalTextSpans.addAll(_processTextStyles(span.text ?? ''));
     }
 
     return TextSpan(
-        children: finalTextSpans,
-        style:
-            TextStyle(color: Colors.black)); // Set default text color to black
+      children: finalTextSpans,
+      style: const TextStyle(color: Colors.black),
+    );
   }
 
-  // Function to process bold, italic text, and bullet points
   List<TextSpan> _processTextStyles(String content) {
-    print("in pts of cp");
     List<TextSpan> resultSpans = [];
     int lastEnd = 0;
 
-    // Combine matches for bold, italic, and bullet points
     final matches = [
       ...regexBold.allMatches(content),
       ...regexItalics.allMatches(content),
@@ -113,18 +95,16 @@ class SubtopicContentPage extends StatelessWidget {
 
     for (var match in matches) {
       if (match.start > lastEnd) {
-        // Add the text before the styled section
         resultSpans
             .add(TextSpan(text: content.substring(lastEnd, match.start)));
       }
 
-      // Determine style based on the match
       if (regexBold.hasMatch(match.group(0)!)) {
         resultSpans.add(TextSpan(
           text: match.group(1),
           style: const TextStyle(
             fontWeight: FontWeight.bold,
-            color: Colors.black, // Ensure bold text is visible
+            color: Colors.black,
           ),
         ));
       } else if (regexItalics.hasMatch(match.group(0)!)) {
@@ -132,21 +112,19 @@ class SubtopicContentPage extends StatelessWidget {
           text: match.group(1),
           style: const TextStyle(
             fontStyle: FontStyle.italic,
-            color: Colors.black, // Ensure italic text is visible
+            color: Colors.black,
           ),
         ));
       } else if (regexBullet.hasMatch(match.group(0)!)) {
         resultSpans.add(TextSpan(
           text: "\u2022 ${match.group(1)?.trim()}\n",
-          style: const TextStyle(
-              color: Colors.black), // Ensure bullet points are visible
+          style: const TextStyle(color: Colors.black),
         ));
       }
 
       lastEnd = match.end;
     }
 
-    // Add any remaining plain text after the last match
     if (lastEnd < content.length) {
       resultSpans.add(TextSpan(text: content.substring(lastEnd)));
     }
@@ -154,27 +132,75 @@ class SubtopicContentPage extends StatelessWidget {
     return resultSpans;
   }
 
-  // Update subtopic status in Firestore
-  Future<void> _updateSubtopicStatus(String topic, String subtopic) async {
+  Future<void> _updateSubtopicStatus(BuildContext context) async {
     try {
       final docRef = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
-          .collection('topics')
-          .doc(topic)
-          .collection('subtopics')
-          .doc(subtopic);
+          .collection('learningPath')
+          .doc(topic.replaceAll(' ', '_'));
 
-      await docRef.update({
-        'status': 'finished', // Mark the subtopic as finished
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final docSnapshot = await transaction.get(docRef);
+
+        if (docSnapshot.exists) {
+          List<dynamic> subtopicsDynamic =
+              docSnapshot.data()?['subtopics'] ?? [];
+
+          // Convert list to mutable List<Map<String, dynamic>>
+          List<Map<String, dynamic>> subtopics = subtopicsDynamic.map((s) {
+            return Map<String, dynamic>.from(s);
+          }).toList();
+
+          int completedSubtopics = 0;
+          // Find the subtopic and update status
+          for (var sub in subtopics) {
+            if (sub['name'] == subtopic) {
+              sub['status'] = 'completed';
+              sub['finishedAt'] =
+                  DateTime.now().toIso8601String(); // Use timestamp as string
+            }
+            if (sub['status'] == 'completed') {
+              completedSubtopics++;
+            }
+          }
+
+          // Update only the modified array
+          transaction.update(docRef, {'subtopics': subtopics});
+
+          int totalSubtopics = subtopics.length;
+          int halfSubtopics = (totalSubtopics / 2).ceil();
+
+          // Check for progress-based badges
+          if (completedSubtopics == halfSubtopics) {
+            await _badgeService.checkAndAwardBadges(userId, completedSubtopics, totalSubtopics);
+            _showBadgeEarnedDialog(context, "Halfway Explorer", "You've completed half of the subtopics!");
+          } else if (completedSubtopics == totalSubtopics) {
+            await _badgeService.checkAndAwardBadges(userId, completedSubtopics, totalSubtopics);
+            _showBadgeEarnedDialog(context, "Topic Mastery", "You've completed all subtopics in this topic!");
+          }
+        }
       });
-
-      print("Subtopic status updated to 'finished'");
+      print("Subtopic '$subtopic' marked as completed in Firestore.");
     } catch (e) {
       print("Error updating subtopic status: $e");
     }
   }
-
+  void _showBadgeEarnedDialog(BuildContext context, String badgeName, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("🎉 Badge Earned!"),
+        content: Text("$badgeName: $message"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -197,7 +223,6 @@ class SubtopicContentPage extends StatelessWidget {
 
           String content = snapshot.data!;
 
-          // Apply formatting and return the formatted text
           return Padding(
             padding: const EdgeInsets.all(16.0),
             child: SingleChildScrollView(
@@ -210,14 +235,22 @@ class SubtopicContentPage extends StatelessWidget {
                   const SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: () async {
-                      // Mark the subtopic as finished in Firestore
-                      await _updateSubtopicStatus(topic, subtopic);
+                      try {
+                        await _updateSubtopicStatus(context);
+                        onSubtopicFinished();
 
-                      // Mark the subtopic as finished and call the callback to move to the next subtopic
-                      onSubtopicFinished();
-
-                      // Optionally, navigate to the next subtopic here
-                      // Navigator.push(context, ...);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text(
+                                  'Subtopic "$subtopic" marked as finished.')),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text(
+                                  'Error marking subtopic as finished: $e')),
+                        );
+                      }
                     },
                     child: const Text('Mark as Finished'),
                   ),
