@@ -163,14 +163,10 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     _timer.cancel();
 
     final firestore = FirebaseFirestore.instance;
+    final userRef = firestore.collection('users').doc(widget.userId);
 
     try {
-      await firestore
-          .collection('users')
-          .doc(widget.userId)
-          .collection('chapterQuiz')
-          .doc(widget.topic)
-          .set({
+      await userRef.collection('chapterQuiz').doc(widget.topic).set({
         'topic': widget.topic,
         'score': _score,
         'totalQuestions': _questions.length,
@@ -179,11 +175,8 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         'status': 'completed'
       }, SetOptions(merge: true));
 
-      final chapterQuizSnapshot = await firestore
-          .collection('users')
-          .doc(widget.userId)
-          .collection('chapterQuiz')
-          .get();
+      // Update total score
+      final chapterQuizSnapshot = await userRef.collection('chapterQuiz').get();
 
       int totalScore = 0;
       for (var doc in chapterQuizSnapshot.docs) {
@@ -194,22 +187,20 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         }
       }
 
-      await firestore.collection('users').doc(widget.userId).set({
+      await userRef.set({
         'totalPoints': totalScore,
       }, SetOptions(merge: true));
 
       await updateLeaderboard(widget.userId, widget.topic, _score);
 
-      await firestore
-          .collection('users')
-          .doc(widget.userId)
-          .collection('learningPath')
-          .doc(widget.topic)
-          .update({
+      await userRef.collection('learningPath').doc(widget.topic).update({
         'completed': true,
       });
+
+      // Update daily streak
+      await _updateDailyStreak(userRef);
     } catch (e) {
-      print("Error storing quiz score or updating totalPoints: $e");
+      print("Error storing quiz score or updating streak: $e");
     }
 
     Navigator.pushReplacement(
@@ -218,6 +209,42 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         builder: (context) => const LearningPathPage(),
       ),
     );
+  }
+
+  Future<void> _updateDailyStreak(DocumentReference userRef) async {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+
+    try {
+      final userDoc = await userRef.get();
+      final data = userDoc.data() as Map<String, dynamic>?;
+
+      if (data != null && data.containsKey('lastActiveDate')) {
+        final lastActive = DateTime.parse(data['lastActiveDate']);
+        final lastDate =
+            DateTime(lastActive.year, lastActive.month, lastActive.day);
+
+        int streak = data['streak'] ?? 0;
+
+        if (todayDate.difference(lastDate).inDays == 1) {
+          streak += 1;
+        } else if (todayDate.difference(lastDate).inDays > 1) {
+          streak = 1;
+        }
+
+        await userRef.set({
+          'streak': streak,
+          'lastActiveDate': todayDate.toIso8601String(),
+        }, SetOptions(merge: true));
+      } else {
+        await userRef.set({
+          'streak': 1,
+          'lastActiveDate': todayDate.toIso8601String(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      print("Error updating streak: $e");
+    }
   }
 
   @override
