@@ -63,6 +63,7 @@ class BadgeService {
         print("🏆 First completed subtopic detected: $completedSubtopic");
         await badgesRef.doc("first_subtopic_completion").set({
           "id": "first_subtopic_completion",
+          "name": "Beginner Learner",
           "earnedAt": FieldValue.serverTimestamp(),
         });
         _showCongratulations(context, onContinue);
