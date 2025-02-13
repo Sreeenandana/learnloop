@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:learnloop/profile.dart';
 import 'path.dart';
 import 'weekly_leaderboard.dart';
@@ -20,7 +22,7 @@ class _HomePageState extends State<HomePage> {
     LearningPathPage(),
     WeeklyLeaderboard(),
     BadgesPage(),
-    ProfilePage(), // Changed from SettingsPage to ProfilePage
+    ProfilePage(),
   ];
 
   void _onItemTapped(int index) {
@@ -62,7 +64,7 @@ class _HomePageState extends State<HomePage> {
           BottomNavigationBarItem(
               icon: Icon(Icons.emoji_events), label: 'Badges'),
           BottomNavigationBarItem(
-              icon: Icon(Icons.person), label: 'Profile'), // Changed to Profile
+              icon: Icon(Icons.person), label: 'Profile'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.deepPurple,
@@ -75,7 +77,36 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
+  @override
+  _HomeScreenState createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String username = "User"; // Default username
+  final User? user = FirebaseAuth.instance.currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUsername();
+  }
+
+  Future<void> _fetchUsername() async {
+    if (user != null) {
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users') // Ensure this matches your Firestore collection
+          .doc(user!.uid)
+          .get();
+
+      if (userDoc.exists) {
+        setState(() {
+          username = userDoc['Username'] ?? "User"; // Fetch from Firestore
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -93,18 +124,13 @@ class HomeScreen extends StatelessWidget {
                   color: const Color(0xFFdda0dd),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Welcome Back!",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  "Welcome Back, $username!", // Displays fetched username
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
