@@ -19,13 +19,16 @@ class WeeklyLeaderboard extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator());
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            print("No data available in the leaderboard collection.");
-            return const const Center(child: Text('No data available.'));
+          print("No data available in the leaderboard collection.");
+          return const Center(child: Text("No data available"));
           }
+
+// Continue with the rest of your code...
+
 
           final leaderboardData = snapshot.data!.docs;
           print("Fetched ${leaderboardData.length} leaderboard entries.");
