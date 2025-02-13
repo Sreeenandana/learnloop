@@ -61,13 +61,9 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
             const SizedBox(height: 16), // Add spacing
-            const Text(
-              "Learnloop", // Replace with your app's name
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white, // Set a color that matches your theme
-              ),
+            Image.asset(
+            "assets/images/learnloop.png", // Path to your PNG file
+            width: 150,
             ),
           ],
         ),
