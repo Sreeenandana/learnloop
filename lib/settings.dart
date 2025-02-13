@@ -59,7 +59,8 @@ class SettingsPageState extends State<SettingsPage> {
               // Navigate to Profile Page
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ProfilePage()),
+                MaterialPageRoute(
+                    builder: (context) => const ProfileSettings()),
               );
             },
           ),
@@ -146,14 +147,14 @@ class SettingsPageState extends State<SettingsPage> {
 
 // Profile Page Implementation
 
-class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+class ProfileSettings extends StatefulWidget {
+  const ProfileSettings({super.key});
 
   @override
-  State<ProfilePage> createState() => _ProfilePageState();
+  State<ProfileSettings> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
+class _ProfilePageState extends State<ProfileSettings> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _usernameController = TextEditingController();
