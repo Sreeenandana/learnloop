@@ -126,7 +126,7 @@ class _LearningPathPageState extends State<LearningPathPage> {
             .collection('users')
             .doc(userId)
             .collection('learningPath')
-            .doc(topic.replaceAll(' ', '_'))
+            .doc(topic)
             .set({'subtopics': subtopics}, SetOptions(merge: true));
       }
     } catch (e) {

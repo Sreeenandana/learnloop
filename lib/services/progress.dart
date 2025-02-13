@@ -17,18 +17,19 @@ class ProgressService {
 
     // Fetch current progress
     DocumentSnapshot progressSnapshot = await progressRef.get();
-    List<String> completedTopics = List<String>.from(progressSnapshot.get('completedTopics') ?? []);
-    int totalTopics = progressSnapshot.get('totalTopics') ?? 10; // Default to 10
+    List<String> completedTopics =
+        List<String>.from(progressSnapshot.get('completedTopics') ?? []);
+    int totalTopics =
+        progressSnapshot.get('totalTopics') ?? 10; // Default to 10
 
     if (!completedTopics.contains(topicId)) {
       completedTopics.add(topicId);
-      await progressRef.set({
-        'completedTopics': completedTopics,
-        'totalTopics': totalTopics
-      }, SetOptions(merge: true));
+      await progressRef.set(
+          {'completedTopics': completedTopics, 'totalTopics': totalTopics},
+          SetOptions(merge: true));
 
       // ✅ **Check and award badges when progress is updated**
-      await _badgeService.checkAndAwardBadges(userId, completedTopics.length, totalTopics);
+      //await _badgeService.checkAndAwardBadges(userId, completedTopics.length, totalTopics);
     }
   }
 }
