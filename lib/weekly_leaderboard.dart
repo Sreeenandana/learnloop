@@ -34,19 +34,43 @@ class WeeklyLeaderboard extends StatelessWidget {
           print("Fetched ${leaderboardData.length} leaderboard entries.");
 
           return ListView.builder(
+            padding: const EdgeInsets.all(10),
             itemCount: leaderboardData.length,
             itemBuilder: (context, index) {
-              final user =
-                  leaderboardData[index].data() as Map<String, dynamic>;
-              print(
-                  "Rendering leaderboard entry: ${user['Username']} with ${user['totalPoints']} points.");
+              final user = leaderboardData[index].data() as Map<String, dynamic>;
+              String username = user['Username'] ?? 'Unknown User';
+              int totalPoints = user['totalPoints'] ?? 0;
 
-              return ListTile(
-                leading: CircleAvatar(
-                  child: Text((index + 1).toString()),
+              // Assign medal icons for top 3 users
+              Widget leadingWidget;
+              if (index == 0) {
+                leadingWidget = const Icon(Icons.emoji_events, color: Colors.amber, size: 40); // Gold
+              } else if (index == 1) {
+                leadingWidget = const Icon(Icons.emoji_events, color: Colors.grey, size: 40); // Silver
+              } else if (index == 2) {
+                leadingWidget = const Icon(Icons.emoji_events, color: Colors.brown, size: 40); // Bronze
+              } else {
+                leadingWidget = CircleAvatar(
+                  backgroundColor: Colors.blueAccent,
+                  child: Text((index + 1).toString(), style: const TextStyle(color: Colors.white)),
+                );
+              }
+
+              return Card(
+                elevation: 3,
+                margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                title: Text(user['Username'] ?? 'Unknown User'),
-                subtitle: Text('Total Points: ${user['totalPoints'] ?? 0}'),
+                child: ListTile(
+                  leading: leadingWidget,
+                  title: Text(
+                    username,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  subtitle: Text('Total Points: $totalPoints', style: const TextStyle(fontSize: 16)),
+                  trailing: Icon(Icons.star, color: Colors.orangeAccent.shade700),
+                ),
               );
             },
           );
