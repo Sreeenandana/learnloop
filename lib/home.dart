@@ -63,8 +63,7 @@ class _HomePageState extends State<HomePage> {
               icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
           BottomNavigationBarItem(
               icon: Icon(Icons.emoji_events), label: 'Badges'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.person), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.deepPurple,

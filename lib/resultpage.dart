@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:collection';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'path.dart';
 
@@ -24,6 +25,10 @@ class ResultPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     _saveResultsToFirestore();
+
+    // Filter out subtopics with a score of 0 for display
+    final selectedSubtopics = Map.fromEntries(topicScores.entries
+        .where((entry) => questions.any((q) => q['topic'] == entry.key)));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Quiz Results')),
@@ -76,10 +81,10 @@ class ResultPage extends StatelessWidget {
               const SizedBox(height: 10),
               Expanded(
                 child: ListView.builder(
-                  itemCount: topicScores.length,
+                  itemCount: selectedSubtopics.length,
                   itemBuilder: (context, index) {
-                    String topic = topicScores.keys.elementAt(index);
-                    int topicScore = topicScores[topic] ?? 0;
+                    String topic = selectedSubtopics.keys.elementAt(index);
+                    int topicScore = selectedSubtopics[topic] ?? 0;
                     return Card(
                       margin: const EdgeInsets.symmetric(vertical: 8),
                       shape: RoundedRectangleBorder(
@@ -143,37 +148,28 @@ class ResultPage extends StatelessWidget {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text("Quiz Review"),
+          title: const Text("Review Answers"),
           content: SizedBox(
             width: double.maxFinite,
-            height: 400,
             child: ListView.builder(
               itemCount: questions.length,
               itemBuilder: (context, index) {
                 final question = questions[index];
-                final String correctAnswer = question['correct_answer'];
-                final String userAnswer = userAnswers[index] ?? "Not Answered";
-                final bool isCorrect = userAnswer == correctAnswer;
+                final userAnswer = userAnswers[index] ?? "No Answer";
+                final correctAnswer = question['correctAnswer'] ?? "N/A";
 
-                return Card(
-                  color: isCorrect ? Colors.green[100] : Colors.red[100],
-                  child: ListTile(
-                    title: Text(
-                      question['question'],
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Your Answer: $userAnswer",
-                            style: TextStyle(
-                                color: isCorrect ? Colors.green : Colors.red,
-                                fontWeight: FontWeight.bold)),
-                        Text("Correct Answer: $correctAnswer",
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
+                return ListTile(
+                  title: Text(question['question'] ?? "Question not found"),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Your Answer: $userAnswer"),
+                      Text("Correct Answer: $correctAnswer",
+                          style: TextStyle(
+                              color: userAnswer == correctAnswer
+                                  ? Colors.green
+                                  : Colors.red)),
+                    ],
                   ),
                 );
               },
@@ -194,10 +190,17 @@ class ResultPage extends StatelessWidget {
     try {
       final userDocRef =
           FirebaseFirestore.instance.collection('users').doc(userId);
+
+      // Convert topicScores to a list to maintain order
+      final orderedTopicScores = topicScores.entries.map((entry) {
+        return {'topic': entry.key, 'score': entry.value};
+      }).toList();
+
       await userDocRef.set({
         'last_score': score,
         'total_questions': total,
-        'topic_scores': topicScores,
+        'topic_scores':
+            orderedTopicScores, // Now stored as a list to preserve order
         'timestamp': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {

@@ -157,10 +157,67 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     }
   }
 
+  void _showReviewDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Review Required'),
+        content: Text(
+          'Sorry! Your score is below 80%.\n\n'
+          'Your Score: $_score / ${_questions.length} '
+          '(${(_score / _questions.length * 100).toStringAsFixed(1)}%)\n\n'
+          'Please review the chapter and try again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context); // Close the dialog
+              Navigator.pop(context); // Go back to the previous screen
+            },
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Congratulations!'),
+        content: Text(
+          'Great job! You have passed the quiz.\n\n'
+          'Your Score: $_score / ${_questions.length} '
+          '(${(_score / _questions.length * 100).toStringAsFixed(1)}%)\n\n'
+          'Click "Continue" to proceed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context); // Close the dialog
+              Navigator.pop(context); // Go back to the previous screen
+            },
+            child: Text('Continue'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _finishQuiz() async {
-    widget.onQuizFinished();
     _stopwatch.stop();
     _timer.cancel();
+
+    double scorePercentage = (_score / _questions.length) * 100;
+
+    if (scorePercentage < 80) {
+      // Strictly below 80%
+      _showReviewDialog();
+      return; // Stop execution to prevent marking as completed
+    }
 
     final firestore = FirebaseFirestore.instance;
     final userRef = firestore.collection('users').doc(widget.userId);
@@ -177,7 +234,6 @@ class _ChapterQuizState extends State<ChapterQuiz> {
 
       // Update total score
       final chapterQuizSnapshot = await userRef.collection('chapterQuiz').get();
-
       int totalScore = 0;
       for (var doc in chapterQuizSnapshot.docs) {
         final data = doc.data();
@@ -197,11 +253,12 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         'completed': true,
       });
 
-      // Update daily streak
       await _updateDailyStreak(userRef);
     } catch (e) {
       print("Error storing quiz score or updating streak: $e");
     }
+
+    _showSuccessDialog();
 
     Navigator.pushReplacement(
       context,
@@ -265,12 +322,31 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
+            /*           Text(
               'Total Time: ${(_stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)} seconds',
               style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Colors.blue),
+            ),*/
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Time: ${(_stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)}s',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue),
+                ),
+                Text(
+                  'Score: $_score / ${_questions.length}',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             Text(
