@@ -49,8 +49,6 @@ class SubtopicContentPage extends StatelessWidget {
 
   Future<void> _updateSubtopicStatus(BuildContext context) async {
     try {
-      //print("📌 Updating subtopic status for: $subtopic in topic: $topic");
-
       final userRef =
           FirebaseFirestore.instance.collection('users').doc(userId);
       final learningPathRef = userRef.collection('learningPath');
@@ -67,7 +65,6 @@ class SubtopicContentPage extends StatelessWidget {
             return Map<String, dynamic>.from(s);
           }).toList();
 
-          int completedSubtopics = 0;
           int currentSubtopicIndex = -1;
           bool isSubtopicUpdated = false;
 
@@ -82,17 +79,13 @@ class SubtopicContentPage extends StatelessWidget {
               }
               currentSubtopicIndex = i;
             }
-
-            if (sub['status'] == 'completed') {
-              completedSubtopics++;
-            }
           }
 
           if (isSubtopicUpdated) {
             transaction.update(docRef, {'subtopics': subtopics});
           }
 
-          // Update the user's current position
+          // Update user's current position
           await userRef.update({
             'currentPosition': {
               'topic': topic,
@@ -100,50 +93,71 @@ class SubtopicContentPage extends StatelessWidget {
             }
           });
 
-          // Check if this is the first completed subtopic
-          bool isFirstSubtopicCompleted = true;
-          final completedSubtopicsSnapshot = await learningPathRef.get();
+          // Unlock and navigate to the next subtopic
+          if (currentSubtopicIndex + 1 < subtopics.length) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text("Subtopic completed! Unlocking next...")),
+            );
 
-          for (var chapter in completedSubtopicsSnapshot.docs) {
-            List<dynamic> chapterSubtopics = chapter.data()['subtopics'] ?? [];
-            for (var sub in chapterSubtopics) {
-              if (sub['status'] == 'completed' && sub['name'] != subtopic) {
-                isFirstSubtopicCompleted = false;
-                break;
-              }
-            }
-            if (!isFirstSubtopicCompleted) break;
+            Future.delayed(const Duration(seconds: 1), () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SubtopicContentPage(
+                    topic: topic,
+                    subtopic: subtopics[currentSubtopicIndex + 1]['name'],
+                    userId: userId,
+                    onSubtopicFinished: onSubtopicFinished,
+                  ),
+                ),
+              );
+            });
+          } else {
+            // Last subtopic completed, return to the previous screen
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("All subtopics completed!")),
+            );
+
+            Future.delayed(const Duration(seconds: 1), () {
+              Navigator.pop(context);
+            });
           }
 
-          // 🏆 Award badge if it's the first completed subtopic
-          if (isFirstSubtopicCompleted) {
-            //print("🏆 Awarding badge for first completed subtopic...");
-
+          // Award badge if this is the first completed subtopic
+          if (currentSubtopicIndex == 0) {
             final badgeDoc =
                 await badgesRef.doc("first_subtopic_completion").get();
-
             if (!badgeDoc.exists) {
               await _badgeService.awardBadge(
                 context,
                 userId,
                 "first_subtopic_completion",
                 () {
-                  //print("➡️ Proceeding to the next subtopic...");
-                  onSubtopicFinished();
+                  // Move to next subtopic after awarding the badge
+                  if (currentSubtopicIndex + 1 < subtopics.length) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SubtopicContentPage(
+                          topic: topic,
+                          subtopic: subtopics[currentSubtopicIndex + 1]['name'],
+                          userId: userId,
+                          onSubtopicFinished: onSubtopicFinished,
+                        ),
+                      ),
+                    );
+                  }
                 },
               );
-              //print("🏅 First Subtopic Completion badge awarded!");
-            } else {
-              //print("🔹 Badge already earned.");
             }
-          } else {
-            // No badge, proceed immediately
-            onSubtopicFinished();
           }
         }
       });
     } catch (e) {
-      //print("❌ Error updating subtopic status: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating subtopic status: $e')),
+      );
     }
   }
 
