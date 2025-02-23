@@ -1,3 +1,7 @@
+//content il ippo i have added example,mcq and fill in the blanks. but user cant select answers yet.
+//also we need to add a check button for each excercise and display msg of result. only if everything is correct, they
+//should be able to move forward.
+//Badges not working, but streaks are
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
