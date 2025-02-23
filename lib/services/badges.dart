@@ -4,23 +4,69 @@ import 'package:flutter/material.dart';
 class BadgeService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<void> awardQuizBadge(
-      BuildContext context, String userId, String badgeId) async {
-    final userBadgesRef =
+  Future<void> awardBadgeOnSubtopicCompletion(
+    BuildContext context,
+    String userId,
+    String subtopic,
+    String topic,
+    int currentSubtopicIndex,
+    List<Map<String, dynamic>> subtopics,
+    VoidCallback onContinue,
+  ) async {
+    try {
+      // Check if it's the first or last subtopic of the first chapter
+      if (topic.startsWith("1")) {
+        // Check if this is the first subtopic
+        if (currentSubtopicIndex == 0) {
+          await _awardFirstSubtopicBadge(context, userId, onContinue);
+        }
+        // Check if this is the last subtopic
+        else if (currentSubtopicIndex == subtopics.length - 2) {
+          print("nowwww");
+          await _awardLastSubtopicBadge(context, userId, onContinue);
+        }
+      }
+    } catch (e) {
+      print("⚠️ Error awarding badge: $e");
+    }
+  }
+
+  Future<void> _awardFirstSubtopicBadge(
+    BuildContext context,
+    String userId,
+    VoidCallback onContinue,
+  ) async {
+    final badgesRef =
         _firestore.collection('users').doc(userId).collection('badges');
+    final badgeDoc = await badgesRef.doc("first_subtopic_completion").get();
+    if (!badgeDoc.exists) {
+      await badgesRef.doc("first_subtopic_completion").set({
+        "id": "first_subtopic_completion",
+        "name": "Beginner Explorer",
+        "earnedAt": FieldValue.serverTimestamp(),
+      });
+      _showBadgePopup(context, "first_subtopic_completion");
+      onContinue();
+    }
+  }
 
-    // Check if the badge already exists
-    final doc = await userBadgesRef.doc(badgeId).get();
-    if (doc.exists) return; // Avoid awarding the same badge multiple times
-
-    // Store badge in Firestore
-    await userBadgesRef.doc(badgeId).set({
-      'id': badgeId,
-      'earnedAt': Timestamp.now(),
-    }, SetOptions(merge: true));
-
-    // Show popup notification
-    _showBadgePopup(context, badgeId);
+  Future<void> _awardLastSubtopicBadge(
+    BuildContext context,
+    String userId,
+    VoidCallback onContinue,
+  ) async {
+    final badgesRef =
+        _firestore.collection('users').doc(userId).collection('badges');
+    final badgeDoc = await badgesRef.doc("last_subtopic_completion").get();
+    if (!badgeDoc.exists) {
+      await badgesRef.doc("last_subtopic_completion").set({
+        "id": "last_subtopic_completion",
+        "name": "Flawless Finisher",
+        "earnedAt": FieldValue.serverTimestamp(),
+      });
+      _showBadgePopup(context, "last_subtopic_completion");
+      onContinue();
+    }
   }
 
   void _showBadgePopup(BuildContext context, String badgeId) {
@@ -39,71 +85,5 @@ class BadgeService {
         );
       },
     );
-  }
-
-  Future<void> awardBadge(BuildContext context, String userId, String badgeId,
-      VoidCallback onContinue) async {
-    try {
-      final userRef = _firestore.collection('users').doc(userId);
-      final badgesRef = userRef.collection('badges');
-
-      await badgesRef.doc(badgeId).set({
-        "id": badgeId,
-        "earnedAt": FieldValue.serverTimestamp(),
-      });
-
-      _showCongratulations(context, onContinue);
-    } catch (e) {
-      print("⚠️ Error awarding badge: $e");
-    }
-  }
-
-  void _showCongratulations(BuildContext context, VoidCallback onContinue) {
-    showDialog(
-      context: context,
-      barrierDismissible:
-          false, // Prevents dialog from closing by tapping outside
-      builder: (context) => AlertDialog(
-        title: const Text("🎉 Congratulations!"),
-        content: const Text(
-            "You've earned the First Subtopic Master badge! Keep up the great work!"),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(); // Close dialog
-              onContinue(); // Proceed to the next subtopic
-            },
-            child: const Text("Continue"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Directly award badge after subtopic completion
-  Future<void> awardBadgeOnSubtopicCompletion(BuildContext context,
-      String userId, String subtopic, VoidCallback onContinue) async {
-    try {
-      print("🏆 Awarding badge for completed subtopic: $subtopic");
-      final userRef = _firestore.collection('users').doc(userId);
-      final badgesRef = userRef.collection('badges');
-
-      final badgeDoc = await badgesRef.doc("first_subtopic_completion").get();
-      if (badgeDoc.exists) {
-        print("🔹 Badge already earned.");
-        return;
-      }
-
-      await badgesRef.doc("first_subtopic_completion").set({
-        "id": "first_subtopic_completion",
-        "earnedAt": FieldValue.serverTimestamp(),
-      });
-
-      _showCongratulations(context, onContinue);
-      print(
-          "🏅 First Subtopic Completion badge awarded immediately after completion!");
-    } catch (e) {
-      print("⚠️ Error awarding badge: $e");
-    }
   }
 }

@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:learnloop/profile.dart';
-import 'path.dart';
+//import 'path.dart';
 import 'weekly_leaderboard.dart';
 import 'badges.dart';
+import 'pathdisplay.dart';
 import 'settings.dart';
 
 class HomePage extends StatefulWidget {
@@ -19,7 +20,7 @@ class _HomePageState extends State<HomePage> {
 
   final List<Widget> _pages = [
     HomeScreen(),
-    LearningPathPage(),
+    LearningPathDisplay(),
     WeeklyLeaderboard(),
     BadgesPage(),
     ProfilePage(),

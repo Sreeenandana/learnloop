@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:collection';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'path.dart';
+import 'pathdisplay.dart';
+import 'pathgen.dart';
+import 'home.dart';
 
 class ResultPage extends StatelessWidget {
   final int score;
@@ -112,17 +116,31 @@ class ResultPage extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   backgroundColor: Colors.white,
                 ),
-                onPressed: () {
+                onPressed: () async {
+                  final generator = LearningPathGenerator();
+
+                  // Show loading dialog with quotes
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => FullScreenLoadingDialog(),
+                  );
+
+                  await generator
+                      .generateOrModifyLearningPath(); // Ensure path is generated
+
+                  Navigator.pop(context); // Close loading dialog
+                  //print("going to path page");
+
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          LearningPathPage(topicScores: topicScores),
-                    ),
+                    MaterialPageRoute(builder: (context) => HomePage()),
                   );
                 },
                 child: const Text("Go to Learning Path",
-                    style: TextStyle(color: Colors.deepPurple, fontSize: 16)),
+                    style: TextStyle(
+                        color: Color.fromARGB(255, 225, 64, 217),
+                        fontSize: 16)),
               ),
               const SizedBox(height: 10),
               ElevatedButton(
@@ -144,6 +162,7 @@ class ResultPage extends StatelessWidget {
   }
 
   void _showQuizReviewDialog(BuildContext context) {
+    print("Question Data: $questions");
     showDialog(
       context: context,
       builder: (context) {
@@ -156,7 +175,7 @@ class ResultPage extends StatelessWidget {
               itemBuilder: (context, index) {
                 final question = questions[index];
                 final userAnswer = userAnswers[index] ?? "No Answer";
-                final correctAnswer = question['correctAnswer'] ?? "N/A";
+                final correctAnswer = question['correct_answer'] ?? "N/A";
 
                 return ListTile(
                   title: Text(question['question'] ?? "Question not found"),
@@ -197,14 +216,57 @@ class ResultPage extends StatelessWidget {
       }).toList();
 
       await userDocRef.set({
-        'last_score': score,
-        'total_questions': total,
+        'initial_marks': score,
+        'initial_qstns': total,
         'topic_scores':
             orderedTopicScores, // Now stored as a list to preserve order
-        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'streak': 0,
+        'totalPoints': 0,
       }, SetOptions(merge: true));
     } catch (e) {
       print("Error saving results: $e");
     }
+  }
+}
+
+class FullScreenLoadingDialog extends StatelessWidget {
+  final List<String> quotes = [
+    "Learning never exhausts the mind. – Leonardo da Vinci",
+    "Education is the passport to the future. – Malcolm X",
+    "The beautiful thing about learning is that no one can take it away from you. – B.B. King",
+    "An investment in knowledge pays the best interest. – Benjamin Franklin",
+    "Success is the sum of small efforts, repeated day in and day out. – Robert Collier"
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    String randomQuote = (quotes..shuffle()).first;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30),
+              child: Text(
+                randomQuote,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

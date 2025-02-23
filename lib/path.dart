@@ -1,3 +1,7 @@
+//modify cheyyumbo just firestore modify aakkeet pinne path motham load aakkam. otherwise orderingil mattam ind.
+//also do the same for first time loading. athilum ordering is bad.
+//i have changed question count to 5.
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,18 +12,21 @@ import 'resultpage.dart';
 
 class LearningPathPage extends StatefulWidget {
   final Map<String, int>? topicScores;
-
-  const LearningPathPage({Key? key, this.topicScores}) : super(key: key);
-
+  final String? topic;
+  final List<String>? weakSubtopics;
+  LearningPathPage({Key? key, this.topicScores, this.topic, this.weakSubtopics})
+      : super(key: key) {
+    //print("Constructor: topic = $topic, weakSubtopics = $weakSubtopics");
+  }
   @override
   _LearningPathPageState createState() => _LearningPathPageState();
 }
 
 class _LearningPathPageState extends State<LearningPathPage> {
-  bool _isLoading = true;
+  String _statusMessage = "";
   String _errorMessage = '';
   final Map<String, List<Map<String, dynamic>>> _subtopics = {};
-
+  bool generated = false;
   final _auth = FirebaseAuth.instance;
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final String _apiKey = 'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44';
@@ -32,54 +39,64 @@ class _LearningPathPageState extends State<LearningPathPage> {
 
   Future<void> _fetchLearningPath() async {
     setState(() {
-      _isLoading = true;
+      _statusMessage = 'Curating Your Personalised Learning Path';
     });
 
+//checks if user is logged in
     try {
       final userId = _auth.currentUser?.uid;
       if (userId == null) {
         setState(() {
           _errorMessage = 'No user is logged in.';
-          _isLoading = false;
+          _statusMessage = "";
         });
         return;
       }
 
-      Map<String, int> topicScores = widget.topicScores ?? {};
+// weaksubtopic indengil modify cheyyanam
+      String? topic = widget.topic;
+      List<String>? weakSubtopics = widget.weakSubtopics;
+      if ((topic ?? '').isNotEmpty && (weakSubtopics?.isNotEmpty ?? false)) {
+        await _modifyWeakSubtopics(topic!, weakSubtopics!);
+      }
 
+//topic score empty aanengil databaseil indonn nokkua
+      Map<String, int> topicScores = widget.topicScores ?? {};
       if (topicScores.isEmpty) {
+        print("topsc mt");
         final learningPathSnapshot = await firestore
             .collection('users')
             .doc(userId)
             .collection('learningPath')
             .get();
-
         if (learningPathSnapshot.docs.isNotEmpty) {
           for (var doc in learningPathSnapshot.docs) {
             topicScores[doc.id] = 0;
           }
         } else {
+          print("lpsnap mt");
           setState(() {
             _errorMessage =
                 'No topic scores available to generate a learning path.';
-            _isLoading = false;
+            _statusMessage = "";
           });
           return;
         }
       }
-
-      // Fetch existing learning path from Firestore
       for (var topic in topicScores.keys) {
         await _loadSubtopicsFromFirestore(topic, topicScores[topic]!);
       }
-
       setState(() {
-        _isLoading = false;
+        _statusMessage = "Let's Start Learning!!";
       });
+      if ((context.mounted) && (generated)) {
+        Navigator.pushReplacementNamed(
+            context, '/home'); // Navigate to Home Page
+      }
     } catch (e) {
       setState(() {
         _errorMessage = 'Error fetching learning path: $e';
-        _isLoading = false;
+        _statusMessage = "";
       });
     }
   }
@@ -87,7 +104,6 @@ class _LearningPathPageState extends State<LearningPathPage> {
   Future<void> _loadSubtopicsFromFirestore(String topic, int score) async {
     final userId = _auth.currentUser?.uid;
     if (userId == null) return;
-
     final docRef = firestore
         .collection('users')
         .doc(userId)
@@ -96,13 +112,22 @@ class _LearningPathPageState extends State<LearningPathPage> {
 
     final docSnapshot = await docRef.get();
 
-    if (docSnapshot.exists && docSnapshot.data()!.containsKey('subtopics')) {
-      setState(() {
-        _subtopics[topic] = List<Map<String, dynamic>>.from(
-            docSnapshot.data()!['subtopics'] ?? []);
-      });
+    if (docSnapshot.exists) {
+      final data = docSnapshot.data();
+      if (data != null && data.containsKey('subtopics')) {
+        final subtopics =
+            List<Map<String, dynamic>>.from(data['subtopics'] ?? []);
+        setState(() {
+          _subtopics[topic] = subtopics;
+        });
+        generated = false;
+      } else {
+        await _generateAndStoreSubtopics(topic, score);
+        generated = true;
+      }
     } else {
       await _generateAndStoreSubtopics(topic, score);
+      generated = true;
     }
   }
 
@@ -140,20 +165,88 @@ class _LearningPathPageState extends State<LearningPathPage> {
           subtopic['status'] = 'pending'; // Default status
         }
 
-        setState(() {
-          _subtopics[topic] = subtopics;
-        });
-
         await firestore
             .collection('users')
             .doc(userId)
             .collection('learningPath')
             .doc(topic)
             .set({'subtopics': subtopics}, SetOptions(merge: true));
+
+        _loadSubtopicsFromFirestore(topic, score);
       }
     } catch (e) {
       setState(() {
         _errorMessage = 'Error generating subtopics: $e';
+      });
+    }
+  }
+
+//unexpected null value vann. ini ellam print cheyth nokkanam.
+  Future<void> _modifyWeakSubtopics(
+      String topic, List<String> weakSubtopics) async {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null || weakSubtopics.isEmpty) return;
+
+    try {
+      print("isnisde mod");
+      String prompt =
+          "Generate subtopics for the topic $topic in the context of java in the learning order."
+          "I have little knowledge in the following subtopics of $topic: ${weakSubtopics.join(', ')}."
+          "Modify these subtopics by breaking them down into simpler subtopics for better understanding. "
+          "Give only subtopic names, no descriptions, no numbering."
+          "Lastly, also provide a quiz title in the format 'Quiz: $topic'.";
+
+      final model = GenerativeModel(
+        model: 'gemini-1.5-flash',
+        apiKey: _apiKey,
+      );
+
+      final content = [Content.text(prompt)];
+      final response = await model.generateContent(content);
+
+      if (response.text != null && response.text!.trim().isNotEmpty) {
+        final newSubtopics = _parseSubtopics(response.text!);
+
+        if (newSubtopics.isEmpty) {
+          setState(() {
+            _errorMessage = 'No modified subtopics generated for $topic.';
+          });
+          return;
+        }
+
+        for (var subtopic in newSubtopics) {
+          subtopic['status'] = 'pending'; // Default status
+        }
+
+        setState(() {
+          // Ensure _subtopics[topic] exists
+          if (!_subtopics.containsKey(topic)) {
+            _subtopics[topic] = [];
+          }
+
+          // Remove weak subtopics
+          _subtopics[topic] = _subtopics[topic]!
+              .where((s) => !weakSubtopics.contains(s['name']))
+              .toList();
+
+          // Add new subtopics
+          _subtopics[topic]!.addAll(newSubtopics);
+        });
+        print("just bef storing mod");
+        await firestore
+            .collection('users')
+            .doc(userId)
+            .collection('learningPath')
+            .doc(topic)
+            .set({'subtopics': _subtopics[topic]}, SetOptions(merge: true));
+      } else {
+        setState(() {
+          _errorMessage = 'AI did not return any text for topic $topic.';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error modifying weak subtopics: $e';
       });
     }
   }
@@ -227,10 +320,13 @@ class _LearningPathPageState extends State<LearningPathPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Learning Path')),
-        body: const Center(child: CircularProgressIndicator()),
+    if (_statusMessage.isNotEmpty) {
+      Padding(
+        padding: EdgeInsets.all(8.0),
+        child: Text(
+          _statusMessage,
+          style: TextStyle(fontSize: 16, color: Colors.blue),
+        ),
       );
     }
 
