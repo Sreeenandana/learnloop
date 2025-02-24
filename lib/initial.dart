@@ -47,29 +47,22 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   Future<void> _fetchTopics() async {
-    //print("Fetching topics...");
-    final model = GenerativeModel(
-      model: 'gemini-1.5-flash',
-      apiKey: _apiKey,
-    );
-
-    try {
-      final response = await model.generateContent([
-        Content.text(
-            "Generate a list of 7 unique java topics for learning. It should be in the order for a beginner to learn. Only give topics, no description and no serial number.the topic names should have no special characters in it ")
-      ]);
-
-      if (response.text != null) {
-        setState(() {
-          _topics =
-              response.text!.split('\n').where((t) => t.isNotEmpty).toList();
-          _isLoadingTopics = false; // Stop loading once topics are received
-          print("Topics received: $_topics");
-        });
-      }
-    } catch (e) {
-      _showError("Error fetching topics: $e");
-    }
+    // Static list of 12 ordered topics
+    setState(() {
+      _topics = [
+        "1. Introduction to Java",
+        "2. Data Types and Variables",
+        "3. Control Flow and loops",
+        "4. Arrays and Strings ",
+        "5. Methods and Functions",
+        "6. Object-Oriented Programming (OOP)",
+        "7. Inheritance and Polymorphism",
+        "8. Exception Handling",
+        "9. File Handling in Java"
+      ];
+      _isLoadingTopics = false; // Stop loading once topics are received
+      print("Topics received: $_topics");
+    });
   }
 
   Widget _buildTopicSelectionUI() {
@@ -161,10 +154,10 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   void _startQuiz() {
-    if (_selectedTopics.isEmpty) {
+/*    if (_selectedTopics.isEmpty) {
       _showError("Please select at least one topic to start the quiz.");
       return;
-    }
+    }*/
     setState(() {
       _quizStarted = true;
       _isLoadingQuestions = true;
@@ -180,15 +173,16 @@ class _QuizPageState extends State<QuizPage> {
 
     List<Map<String, dynamic>> generatedQuestions = [];
     int questionsPerTopic =
-        (20 / _selectedTopics.length).ceil(); // Distribute 20 questions
+        (5 / _selectedTopics.length).ceil(); // Distribute 20 questions
 
     for (var topic in _selectedTopics) {
       try {
         print("Fetching questions for topic: $topic");
         final response = await model.generateContent([
           Content.text(
-              "Generate $questionsPerTopic beginner-level java related multiple-choice questions (MCQs) with exactly 4 options. "
-              "from the topic '$topic'. Format each question as 'qstn:', options as 'opt:'(comma-separated), 'ans:' for the correct answer, and 'top:' for the topic which should be $topic. do not repeat questions. do not put unnecessary special characters")
+              "Generate $questionsPerTopic beginner-level java related multiple-choice questions (MCQs) with exactly 4 options and no more. "
+              "from the topic '$topic'. ignore the number before the topic name. Format each question as 'qstn:', options as 'opt:'(separated by :), 'ans:' for the correct answer, and 'top:' for the topic which should be $topic including the number at the beginning."
+              " do not repeat questions. do not put unnecessary special characters or explanations or brackets.")
         ]);
 
         if (response.text != null) {
@@ -236,7 +230,7 @@ class _QuizPageState extends State<QuizPage> {
         topic = null;
       } else if (line.startsWith("opt:")) {
         currentOptions =
-            line.substring(4).split(',').map((s) => s.trim()).toList();
+            line.substring(4).split(':').map((s) => s.trim()).toList();
       } else if (line.startsWith("ans:")) {
         correctAnswer = line.substring(4).trim();
       } else if (line.startsWith("top:")) {
@@ -277,7 +271,7 @@ class _QuizPageState extends State<QuizPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Quiz')),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
