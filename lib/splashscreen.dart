@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'home.dart'; // Import your HomePage
 import 'login.dart'; // Import your LoginPage
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -43,27 +41,28 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(
-          221, 160, 221, 1), // Set your preferred background color
+      backgroundColor: const Color.fromRGBO(221, 160, 221, 1), // Background color
       body: Center(
         child: Column(
+          mainAxisSize: MainAxisSize.min, // Ensures only necessary space is occupied
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center, // Ensures everything is center-aligned
           children: [
             CircleAvatar(
               backgroundColor: const Color.fromRGBO(221, 160, 221, 1),
-              radius: 64, // Adjust the size of the logo circle
+              radius: 64, // Adjust size of the logo circle
               child: Padding(
                 padding: const EdgeInsets.all(4.0),
                 child: Image.asset(
                   "assets/images/logo.png", // Path to your logo image
-                  scale: 2.0, // Scale the logo as needed
+                  scale: 2.5, // Scale the logo
                 ),
               ),
             ),
-            const SizedBox(height: 16), // Add spacing
             Image.asset(
-            "assets/images/learnloop.png", // Path to your PNG file
-            width: 150,
+              "assets/images/learnloop.png", // Path to your PNG file
+              width: 180,
+              alignment: Alignment.center, // Ensures perfect center alignment
             ),
           ],
         ),

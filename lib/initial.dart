@@ -405,5 +405,5 @@ class _QuizPageState extends State<QuizPage> {
 
   void _showError(String message) {
     print("ERROR: $message");
-  }
+  g}
 }
