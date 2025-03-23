@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:learnloop/profile.dart';
-//import 'path.dart';
+import 'completed.dart';
+import 'profile.dart';
 import 'weekly_leaderboard.dart';
 import 'badges.dart';
 import 'pathdisplay.dart';
@@ -24,6 +24,7 @@ class _HomePageState extends State<HomePage> {
     WeeklyLeaderboard(),
     BadgesPage(),
     ProfilePage(),
+    CompletedTopicsPage(),
   ];
 
   void _onItemTapped(int index) {
@@ -51,7 +52,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             )
-          : null, // Show AppBar only on the Home tab
+          : null, // Show AppBar only on Home
 
       body: _pages[_selectedIndex],
 
@@ -85,26 +86,49 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String username = "User"; // Default username
   final User? user = FirebaseAuth.instance.currentUser;
+  double completedProgress = 0.0;
+  double inProgressProgress = 0.0;
+  double pendingProgress = 0.0;
 
   @override
   void initState() {
     super.initState();
     _fetchUsername();
+    _fetchProgressData();
   }
 
   Future<void> _fetchUsername() async {
     if (user != null) {
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users') // Ensure this matches your Firestore collection
+          .collection('users')
           .doc(user!.uid)
           .get();
 
       if (userDoc.exists) {
         setState(() {
-          username = userDoc['Username'] ?? "User"; // Fetch from Firestore
+          username = userDoc['Username'] ?? "User";
         });
       }
     }
+  }
+
+  Future<void> _fetchProgressData() async {
+    double completed = await fetchCompletedProgress();
+    double inProgress = await fetchInProgressProgress();
+
+    setState(() {
+      completedProgress = completed;
+      inProgressProgress = inProgress;
+      pendingProgress = 1 - (completed + inProgress);
+    });
+  }
+
+  Future<double> fetchCompletedProgress() async {
+    return 0.6; // 60% completed (Placeholder)
+  }
+
+  Future<double> fetchInProgressProgress() async {
+    return 0.3; // 30% in progress (Placeholder)
   }
 
   @override
@@ -117,6 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 🟣 Welcome Banner
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -125,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  "Welcome Back, $username!", // Displays fetched username
+                  "Welcome Back, $username!",
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -133,18 +158,41 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
+
               const SizedBox(height: 20),
+
+              // 🔵 Grid View with Circular Progress Indicators
               Expanded(
                 child: GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
+                  crossAxisCount: 3, // 3 items per row
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
                   children: [
-                    _buildFeatureCard("Completed", Icons.check_circle),
-                    _buildFeatureCard("In Progress", Icons.sync),
-                    _buildFeatureCard("To Do", Icons.list),
-                    _buildFeatureCard(
-                        "Quizzes Completed", Icons.assignment_turned_in),
+                    _buildProgressCard(
+                      "Completed",
+                      Icons.check_circle,
+                      completedProgress,
+                      Colors.purple,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => CompletedTopicsPage()),
+                        );
+                      },
+                    ),
+                    _buildProgressCard(
+                      "In Progress",
+                      Icons.sync,
+                      inProgressProgress,
+                      Colors.blue,
+                    ),
+                    _buildProgressCard(
+                      "Pending",
+                      Icons.pending,
+                      pendingProgress,
+                      Colors.grey,
+                    ),
                   ],
                 ),
               ),
@@ -155,19 +203,55 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  static Widget _buildFeatureCard(String title, IconData icon) {
-    return Card(
-      elevation: 5,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 40, color: Colors.purpleAccent),
-          const SizedBox(height: 10),
-          Text(title,
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        ],
+  // 🎯 Circular Progress Card Builder
+  Widget _buildProgressCard(
+      String title, IconData icon, double progress, Color color,
+      {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.3),
+              blurRadius: 8,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  height: 70,
+                  width: 70,
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 8,
+                    backgroundColor: Colors.grey[300],
+                    color: color,
+                  ),
+                ),
+                Text(
+                  "${(progress * 100).toInt()}%",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Icon(icon, size: 30, color: color),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
       ),
     );
   }
