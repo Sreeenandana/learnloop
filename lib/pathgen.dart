@@ -30,12 +30,13 @@ class LearningPathGenerator {
     // Show loading dialog only if context is available
     if (context != null) _showLoadingDialog(context);
 
-    final topicScores = await _fetchTopicScores(userId);
-
     if (topic != null && weakSubtopics != null && weakSubtopics.isNotEmpty) {
       print("bef mod");
       await _modifyWeakSubtopics(userId, topic, weakSubtopics);
+      return;
     }
+
+    final topicScores = await _fetchTopicScores(userId);
 
     for (var topic in topicScores.keys) {
       await _generateAndStoreSubtopics(userId, topic, topicScores[topic]!);
@@ -102,27 +103,67 @@ class LearningPathGenerator {
 
   Future<void> _modifyWeakSubtopics(
       String userId, String topic, List<String> weakSubtopics) async {
-    final prompt =
-        "Modify weak subtopics of $topic in Java by breaking them into simpler concepts. "
-        "Weak subtopics: ${weakSubtopics.join(', ')}. "
-        "Provide only subtopic names, no descriptions, no numbering. "
-        "Lastly, provide a quiz title as 'Quiz: $topic'.";
-
+    final firestore = FirebaseFirestore.instance;
     final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: _apiKey);
-    final response = await model.generateContent([Content.text(prompt)]);
 
-    if (response.text == null || response.text!.trim().isEmpty) {
-      print("Error: AI response is empty");
-      return;
-    }
-
-    final newSubtopics = _parseSubtopics(response.text!);
-    await firestore
+    final docRef = firestore
         .collection('users')
         .doc(userId)
         .collection('learningPath')
-        .doc(topic)
-        .set({'subtopics': newSubtopics}, SetOptions(merge: true));
+        .doc(topic);
+    final docSnapshot = await docRef.get();
+
+    if (!docSnapshot.exists || !docSnapshot.data()!.containsKey('subtopics')) {
+      print("Error: No subtopics found for $topic");
+      return;
+    }
+
+    List<Map<String, dynamic>> subtopics =
+        List<Map<String, dynamic>>.from(docSnapshot.data()!['subtopics']);
+
+    // Separate the quiz entry (if exists)
+    Map<String, dynamic>? quizEntry;
+    subtopics.removeWhere((subtopic) {
+      if (subtopic['name'].toString().startsWith("Quiz:")) {
+        quizEntry = Map<String, dynamic>.from(subtopic); // ✅ Ensure non-null
+        print("Quiz removed");
+        return true;
+      }
+      return false;
+    });
+
+    List<Map<String, dynamic>> updatedSubtopics = List.from(subtopics);
+
+    for (String weakSubtopic in weakSubtopics) {
+      int index = updatedSubtopics.indexWhere((s) => s['name'] == weakSubtopic);
+      if (index == -1) continue; // If subtopic is not found, skip
+
+      final prompt =
+          "Break down the subtopic '$weakSubtopic' from the topic '$topic' in Java into simpler concepts. "
+          "Only 2 or 3 new subtopics are needed. Provide only the new subtopic names, without descriptions or numbering.";
+
+      final response = await model.generateContent([Content.text(prompt)]);
+      print(response.text);
+      if (response.text == null || response.text!.trim().isEmpty) {
+        print("Error: AI response for $weakSubtopic is empty");
+        continue; // Skip this subtopic if AI fails
+      }
+
+      final newSubtopics = _parseSubtopics(response.text!);
+
+      // Remove the weak subtopic and insert new subtopics at the same index
+      updatedSubtopics.removeAt(index);
+      updatedSubtopics.insertAll(index, newSubtopics);
+    }
+
+    // Re-add the quiz entry at the end if it exists
+    if (quizEntry != null) {
+      print("Quiz added at the end");
+      updatedSubtopics.add(quizEntry!);
+    }
+
+    // Update Firestore with the modified subtopics list
+    await docRef.set({'subtopics': updatedSubtopics}, SetOptions(merge: true));
   }
 
   List<Map<String, dynamic>> _parseSubtopics(String responseText) {

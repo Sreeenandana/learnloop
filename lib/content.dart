@@ -43,12 +43,12 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
     _fetchSubtopicContent();
     _initializeFCM();
   }
+
   @override
   void dispose() {
-    _inactivityTimer?.cancel();  // Cancel timer if the user leaves
+    _inactivityTimer?.cancel(); // Cancel timer if the user leaves
     super.dispose();
   }
-
 
   Future<void> _fetchSubtopicContent() async {
     try {
@@ -57,7 +57,15 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
         apiKey: _apiKey,
       );
 
-      final response = await model.generateContent([Content.text(widget.subtopic)]);
+      if (widget.subtopic == null || widget.subtopic!.trim().isEmpty) {
+        throw Exception('Subtopic is null or empty');
+      }
+
+      final response = await model.generateContent([
+        Content.text(
+            "Generate some explanation about ${widget.subtopic} in the context of Java programming. "
+            "Make it interesting and catchy. Imagine you are teaching a 13-year-old. Also, include examples and very simple questions.")
+      ]);
 
       if (response.text != null && response.text!.trim().isNotEmpty) {
         setState(() {
@@ -91,7 +99,8 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
       // Listen for foreground notifications
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         if (message.notification != null) {
-          _showNotificationDialog(message.notification!.title, message.notification!.body);
+          _showNotificationDialog(
+              message.notification!.title, message.notification!.body);
         }
       });
 
@@ -100,6 +109,7 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
       print("❌ Notifications permission denied");
     }
   }
+
   void _scheduleReminder() {
     if (!_isReminderScheduled) {
       _isReminderScheduled = true;
@@ -117,7 +127,7 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
     Workmanager().registerOneOffTask(
       "subtopic_reminder_task",
       "showReminderNotification",
-      initialDelay: Duration(minutes: 1),  
+      initialDelay: Duration(minutes: 1),
     );
 
     print("⏳ Background task scheduled - Notification in 1 minute.");
@@ -125,12 +135,14 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
 
   void _startInactivityTimer() {
     _cancelInactivityTimer();
-    _inactivityTimer?.cancel();  // Cancel any existing timer
+    _inactivityTimer?.cancel(); // Cancel any existing timer
     _inactivityTimer = Timer(Duration(minutes: 1), () {
       scheduleSubtopicReminder();
     });
-    print("⏳ Inactivity timer started - user must select a new subtopic within 1 minute.");
+    print(
+        "⏳ Inactivity timer started - user must select a new subtopic within 1 minute.");
   }
+
   void _cancelInactivityTimer() {
     if (_inactivityTimer != null && _inactivityTimer!.isActive) {
       _inactivityTimer!.cancel();
@@ -152,7 +164,7 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
         NotificationDetails(android: androidDetails);
 
     await flutterLocalNotificationsPlugin.show(
-      1,  // Unique notification ID
+      1, // Unique notification ID
       "Don't Stop Learning!",
       "You haven't selected a new subtopic. Keep going!",
       notificationDetails,
@@ -180,10 +192,30 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
   }
 
   Map<String, dynamic> _parseGeneratedContent(String response) {
+    // Split response into parts based on common keywords
+    List<String> sections = response.split(RegExp(r'\n\n|\n-|\n•'));
+
+    String explanation = '';
+    String example = '';
+    List<String> questions = [];
+
+    for (String section in sections) {
+      String cleanSection =
+          section.replaceAll('*', '').replaceAll('#', '').trim();
+
+      if (cleanSection.toLowerCase().contains('example:')) {
+        example = cleanSection.replaceFirst(RegExp(r'(?i)example:'), '').trim();
+      } else if (cleanSection.toLowerCase().contains('question')) {
+        questions.add(cleanSection);
+      } else {
+        explanation += cleanSection + '\n\n';
+      }
+    }
+
     return {
-      'explanation': response.replaceAll('*', '').replaceAll('#', ''),
-      'example': '',
-      'questions': [],
+      'explanation': explanation.trim(),
+      'example': example.trim(),
+      'questions': questions,
     };
   }
 
@@ -239,10 +271,16 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
                                 SizedBox(height: 10),
                                 Text(
                                   subtopicData!['explanation'],
-                                  style: TextStyle(fontSize: 16, color: Colors.black87),
+                                  style: TextStyle(
+                                      fontSize: 16, color: Colors.black87),
                                 ),
                                 SizedBox(height: 20),
-                                Image.asset('assets/${widget.subtopic.replaceAll(' ', '_').toLowerCase()}.png', height: 200, errorBuilder: (context, error, stackTrace) => Container()),
+                                Image.asset(
+                                    'assets/${widget.subtopic.replaceAll(' ', '_').toLowerCase()}.png',
+                                    height: 200,
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            Container()),
                               ],
                             ),
                           ),
@@ -250,8 +288,9 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
                         SizedBox(height: 20),
                         ElevatedButton(
                           onPressed: () {
-                            widget.onSubtopicFinished();  // Mark as finished
-                            Navigator.pop(context);  // ✅ Return to Subtopic List instead of moving to next subtopic
+                            widget.onSubtopicFinished(); // Mark as finished
+                            Navigator.pop(
+                                context); // ✅ Return to Subtopic List instead of moving to next subtopic
                             _scheduleReminder(); // ✅ Start Reminder for Foreground
                             _scheduleBackgroundReminder();
                           },
@@ -266,7 +305,9 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
                             child: Text(
                               'Mark as Finished',
                               style: TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white),
                             ),
                           ),
                         ),

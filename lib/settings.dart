@@ -60,7 +60,8 @@ class SettingsPageState extends State<SettingsPage> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ProfileSettings()),
+                  MaterialPageRoute(
+                      builder: (context) => const ProfileSettings()),
                 );
               },
             ),
@@ -71,7 +72,8 @@ class SettingsPageState extends State<SettingsPage> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ChangePasswordPage()),
+                  MaterialPageRoute(
+                      builder: (context) => const ChangePasswordPage()),
                 );
               },
             ),
@@ -174,8 +176,8 @@ class _ProfilePageState extends State<ProfileSettings> {
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
 
       setState(() {
-        _email = user.email;
-        _username = userDoc['username'];
+        _email = userDoc['email'];
+        _username = userDoc['Username'];
         _profileImageUrl = userDoc['profileImageUrl'];
         _usernameController.text = _username ?? '';
       });

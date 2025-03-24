@@ -1,3 +1,5 @@
+// ignore_for_file: unused_import
+
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -181,7 +183,7 @@ class _QuizPageState extends State<QuizPage> {
         final response = await model.generateContent([
           Content.text(
               "Generate $questionsPerTopic beginner-level java related multiple-choice questions (MCQs) with exactly 4 options and no more. "
-              "from the topic '$topic'. ignore the number before the topic name. Format each question as 'qstn:', options as 'opt:'(separated by :), 'ans:' for the correct answer, and 'top:' for the topic which should be $topic including the number at the beginning."
+              "from the topic '$topic'. do not use commas anywhere else other than to separate options. ignore the number before the topic name. Format each question as 'qstn:', options as 'opt:'(separated by :), 'ans:' for the correct answer, and 'top:' for the topic which should be $topic including the number at the beginning."
               " do not repeat questions. do not put unnecessary special characters or explanations or brackets.")
         ]);
 
