@@ -328,11 +328,11 @@ class _ChapterQuizState extends State<ChapterQuiz> {
 
     await userRef.set({'totalPoints': totalScore}, SetOptions(merge: true));
     streakModified = await _updateDailyStreak(userRef);
-
+    int failCount = 0;
     if (scorePercentage < 80) {
       await userRef.collection('learningPath').doc(widget.topic).update({
         'completed': false,
-        'generateSimplerSubtopics': true,
+        'generateSimplerSubtopics': failCount + 1,
         'weakSubtopics': weakSubtopics.toSet().toList(),
       });
 

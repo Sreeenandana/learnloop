@@ -118,6 +118,16 @@ class LearningPathGenerator {
       return;
     }
 
+    // Check failCount
+    int failCount = docSnapshot.data()!.containsKey('failCount')
+        ? docSnapshot.data()!['failCount'] as int
+        : 0;
+
+    if (failCount >= 3) {
+      print("Fail count limit reached (3). Not modifying subtopics.");
+      return;
+    }
+
     List<Map<String, dynamic>> subtopics =
         List<Map<String, dynamic>>.from(docSnapshot.data()!['subtopics']);
 
