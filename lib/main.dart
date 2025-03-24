@@ -18,16 +18,17 @@ void callbackDispatcher() {
 }
 
 // Background message handler
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   print("Handling a background message: ${message.messageId}");
 }
+
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
 void showReminderNotification() async {
-  const AndroidNotificationDetails androidDetails =
-      AndroidNotificationDetails(
+  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
     'subtopic_reminder_channel',
     'Subtopic Reminders',
     importance: Importance.high,
@@ -38,7 +39,7 @@ void showReminderNotification() async {
       NotificationDetails(android: androidDetails);
 
   await flutterLocalNotificationsPlugin.show(
-    1,  
+    1,
     "Don't Stop Learning!",
     "You haven't selected a new subtopic. Keep going!",
     notificationDetails,
@@ -50,10 +51,9 @@ void main() async {
 
   await Workmanager().initialize(
     callbackDispatcher,
-    isInDebugMode: true,  
+    isInDebugMode: true,
   );
 
-  
   // Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -65,11 +65,12 @@ void main() async {
   final InitializationSettings initializationSettings =
       InitializationSettings(android: androidInitializationSettings);
 
-  await flutterLocalNotificationsPlugin.initialize(const InitializationSettings(
+  await flutterLocalNotificationsPlugin.initialize(
+    const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     ),
   );
-  
+
   // Firebase Messaging instance
   FirebaseMessaging messaging = FirebaseMessaging.instance;
 
@@ -128,6 +129,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Firebase Notifications',
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,

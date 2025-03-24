@@ -95,10 +95,15 @@ class _ChapterQuizState extends State<ChapterQuiz> {
 
     return "Generate 5 multiple choice questions (MCQs) about Java, on topic $topic. "
         "Focus on the following subtopics: $subtopicsString. "
-        "For each question, start with 'qstn:' for the question, 'opt:' for the options. "
-        "'ans:' for the correct answer, and 'sub:' for the subtopic. the options must be separated by commas always. do not use commas anywhere else other than to separate options. "
-        "Separate each question set with a newline. Give exactly 4 options. "
-        "Do not provide any other message or use any special characters unless necessary.";
+        "Each question must be structured as follows:"
+        "qstn: [Question text]\n"
+        "opt: [Option1], [Option2], [Option3], [Option4]\n"
+        "ans: [Correct Option (exact match from opt)]\n"
+        "sub: [Subtopic]\n\n"
+        "Ensure that:\n"
+        "- Options are comma-separated.\n"
+        "- The correct answer appears exactly as listed in 'opt'.\n"
+        "- No additional text is provided.";
   }
 
   Future<List<String>> _fetchSubtopicsFromFirestore(String topic) async {
@@ -132,7 +137,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
   List<dynamic> _parseQuestions(String responseText) {
     final List<dynamic> parsedQuestions = [];
     final lines = responseText.split('\n');
-    Map<String, String> currentQuestion = {};
+    Map<String, dynamic> currentQuestion = {};
 
     for (var line in lines) {
       line = line.trim();
@@ -143,7 +148,12 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         }
         currentQuestion['qstn'] = line.substring(5).trim();
       } else if (line.startsWith('opt:')) {
-        currentQuestion['opt'] = line.substring(4).trim();
+        var options = line.substring(4).trim().split(',');
+        options = options.map((opt) => opt.trim()).toList();
+        if (options.length != 4) {
+          print("⚠️ Warning: Incorrect options format - $options");
+        }
+        currentQuestion['opt'] = options;
       } else if (line.startsWith('ans:')) {
         currentQuestion['ans'] = line.substring(4).trim();
       } else if (line.startsWith('sub:')) {
@@ -158,11 +168,10 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     return parsedQuestions;
   }
 
-  Map<String, dynamic> _buildQuestionMap(Map<String, String> question) {
+  Map<String, dynamic> _buildQuestionMap(Map<String, dynamic> question) {
     return {
       'question': question['qstn'] ?? '',
-      'options':
-          (question['opt'] ?? '').split(',').map((opt) => opt.trim()).toList(),
+      'options': question.containsKey('opt') ? question['opt'] : [],
       'correct_answer': question['ans'] ?? '',
       'subtopic': question['sub'] ?? '',
     };
@@ -202,6 +211,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       _finishQuiz();
     }
   }
+//FINISHING THE QUIZ
 
   Future<void> _finishQuiz() async {
     _stopwatch.stop();
@@ -209,7 +219,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
 
     String message;
     List<Widget> actions = [];
-    bool streakModified = false; // Track if streak was modified
+    bool streakModified = false;
 
 //SCORE CALCULATION
     if ((_score / _questions.length) * 100 < 80) {
@@ -245,7 +255,8 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       );
     } else {
       // User passed, show review option
-      message = 'Your Score: $_score / ${_questions.length} '
+      message = 'Congratulations! You passed!'
+          'Your Score: $_score / ${_questions.length} '
           '(${(_score / _questions.length * 100).toStringAsFixed(1)}%)\n\n'
           'Would you like to review incorrect answers?';
 
@@ -332,7 +343,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     if (scorePercentage < 80) {
       await userRef.collection('learningPath').doc(widget.topic).update({
         'completed': false,
-        'generateSimplerSubtopics': failCount + 1,
+        'failcount': failCount + 1,
         'weakSubtopics': weakSubtopics.toSet().toList(),
       });
 

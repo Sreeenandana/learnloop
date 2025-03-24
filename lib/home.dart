@@ -6,8 +6,7 @@ import 'profile.dart';
 import 'weekly_leaderboard.dart';
 import 'badges.dart';
 import 'pathdisplay.dart';
-import 'services/badges.dart';
-import 'services/progress.dart';
+//import 'services/progress.dart';
 import 'settings.dart';
 
 class HomePage extends StatefulWidget {

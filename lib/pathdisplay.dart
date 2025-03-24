@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:learnloop/content.dart';
+import 'main.dart';
 import 'package:learnloop/quizcontent.dart';
 
 class LearningPathDisplay extends StatelessWidget {
@@ -132,6 +133,7 @@ class LearningPathDisplay extends StatelessWidget {
 
   void _navigateToContent(BuildContext context, String userId, String topic,
       List<dynamic> subtopics, String subtopic) {
+    print("in nav to contnt");
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -148,6 +150,8 @@ class LearningPathDisplay extends StatelessWidget {
 
   void _markSubtopicCompleted(BuildContext context, String userId, String topic,
       List<dynamic> subtopics, String subtopic) async {
+    print("✅ Marking subtopic as completed: $subtopic");
+
     final userRef = firestore.collection('users').doc(userId);
     final topicRef = userRef.collection('learningPath').doc(topic);
 
@@ -155,9 +159,10 @@ class LearningPathDisplay extends StatelessWidget {
     if (index != -1) {
       subtopics[index]['status'] = 'completed';
       await topicRef.update({'subtopics': subtopics});
+      print("✅ Firestore updated for subtopic completion.");
     }
 
-    // Update streak
+    // **Update Streak**
     final userSnapshot = await userRef.get();
     if (userSnapshot.exists) {
       final data = userSnapshot.data();
@@ -169,7 +174,7 @@ class LearningPathDisplay extends StatelessWidget {
 
       if (lastCompletionDate != null) {
         final difference = today.difference(lastCompletionDate).inDays;
-        currentStreak = (difference == 1) ? currentStreak + 1 : 1;
+        currentStreak = (difference <= 1) ? currentStreak + 1 : 1;
       } else {
         currentStreak = 1;
       }
@@ -178,22 +183,89 @@ class LearningPathDisplay extends StatelessWidget {
         'streak': currentStreak,
         'lastCompletion': Timestamp.fromDate(today),
       });
+
+      print("✅ Streak updated: $currentStreak days");
     }
 
-    // Auto-navigate to next subtopic
-    if (index != -1 && index + 1 < subtopics.length) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        final nextSubtopic = subtopics[index + 1]['name'];
-        if (nextSubtopic.toLowerCase().startsWith("quiz")) {
-          _navigateToQuiz(context, userId, topic, subtopics, nextSubtopic);
-        } else {
-          _navigateToContent(context, userId, topic, subtopics, nextSubtopic);
+    // **Check and Award First Subtopic Badge**
+    // **Check and Award First Subtopic Badge**
+    try {
+      print("🔍 Checking for first subtopic badge...");
+
+      // Fetch first topic that STARTS with "1."
+      QuerySnapshot topicSnapshot = await firestore
+          .collection('users')
+          .doc(userId)
+          .collection('learningPath')
+          .where(FieldPath.documentId, isGreaterThanOrEqualTo: '1.')
+          .where(FieldPath.documentId,
+              isLessThan: '2') // Ensures only "1.x" topics are considered
+          .limit(1)
+          .get();
+
+      if (topicSnapshot.docs.isEmpty) {
+        print("❌ No topics found starting with '1.'");
+        return;
+      }
+
+      DocumentSnapshot firstTopicDoc = topicSnapshot.docs.first;
+      String firstTopicId = firstTopicDoc.id;
+      List<dynamic> subtopics = firstTopicDoc['subtopics'];
+
+      if (subtopics.isEmpty) {
+        print("❌ No subtopics found for topic $firstTopicId");
+        return;
+      }
+
+      String firstSubtopicName = subtopics.first['name'];
+      print("🎯 First subtopic: $firstSubtopicName");
+
+      // Normalize and compare subtopic names
+      if (subtopic.trim().toLowerCase() ==
+          firstSubtopicName.trim().toLowerCase()) {
+        DocumentSnapshot badgeDoc = await firestore
+            .collection('users')
+            .doc(userId)
+            .collection('badges')
+            .doc('first subtopic')
+            .get();
+
+        if (!badgeDoc.exists) {
+          await firestore
+              .collection('users')
+              .doc(userId)
+              .collection('badges')
+              .doc('first subtopic')
+              .set({
+            'timestamp': Timestamp.now() // User can mark it as read later
+          });
+          print("📩 badges saved in Firestore.");
+          Future.delayed(Duration.zero, () {
+            if (navigatorKey.currentContext != null) {
+              showDialog(
+                context: navigatorKey.currentContext!,
+                builder: (BuildContext dialogContext) {
+                  return AlertDialog(
+                    title: Text("🏅 Badge Earned!"),
+                    content: Text(
+                        "🎉 Congratulations! You've earned the 'First Subtopic Completed' badge!"),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                        },
+                        child: Text("OK"),
+                      ),
+                    ],
+                  );
+                },
+              );
+            }
+          });
         }
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("All subtopics completed!")),
-      );
+      }
+    } catch (e) {
+      print("❌ Error awarding badge: $e");
     }
   }
 }
