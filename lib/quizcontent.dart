@@ -95,8 +95,8 @@ class _ChapterQuizState extends State<ChapterQuiz> {
 
     return "Generate 5 multiple choice questions (MCQs) about Java, on topic $topic. "
         "Focus on the following subtopics: $subtopicsString. "
-        "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
-        "'ans:' for the correct answer, and 'sub:' for the subtopic. do not use commas anywhere else other than to separate options. "
+        "For each question, start with 'qstn:' for the question, 'opt:' for the options. "
+        "'ans:' for the correct answer, and 'sub:' for the subtopic. the options must be separated by commas always. do not use commas anywhere else other than to separate options. "
         "Separate each question set with a newline. Give exactly 4 options. "
         "Do not provide any other message or use any special characters unless necessary.";
   }

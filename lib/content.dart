@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:learnloop/services/badges.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:learnloop/services/badges.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -171,6 +172,70 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
     );
   }
 
+  Future<void> _checkBadge(String userId, String topic, String subtopic,
+      BuildContext context) async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final userRef = firestore.collection('users').doc(userId);
+      final learningPathRef = userRef.collection('learningPath');
+
+      // 🔹 Get the first topic (ordered by 'order' field)
+      final querySnapshot =
+          await learningPathRef.orderBy('order').limit(1).get();
+      if (querySnapshot.docs.isEmpty) return; // No topics exist
+
+      final firstTopicDoc = querySnapshot.docs.first;
+      final firstTopic = firstTopicDoc.id;
+      print("First Topic: $firstTopic");
+
+      // 🔹 Ensure the completed subtopic belongs to the first topic
+      if (topic != firstTopic) return;
+
+      // 🔹 Retrieve subtopics list
+      final subtopics = firstTopicDoc.data()?['subtopics'] as List<dynamic>?;
+      if (subtopics == null || subtopics.isEmpty) return; // No subtopics exist
+
+      // 🔹 Ensure the completed subtopic is the first one
+      final firstSubtopic = subtopics.first as Map<String, dynamic>;
+      if (firstSubtopic.containsKey('name') &&
+          firstSubtopic['name'] == subtopic) {
+        final badgesRef =
+            firestore.collection('users').doc(userId).collection('badges');
+        final badgeDoc = await badgesRef.doc("first_subtopic_completion").get();
+
+        if (!badgeDoc.exists) {
+          await badgesRef.doc("first_subtopic_completion").set({
+            "id": "first_subtopic_completion",
+            "name": "Beginner Explorer",
+            "earnedAt": FieldValue.serverTimestamp(),
+          });
+
+          // 🎉 Show Badge Earned Dialog
+          if (context.mounted) {
+            showDialog(
+              context: context,
+              builder: (context) {
+                return AlertDialog(
+                  title: const Text("🎉 Badge Earned!"),
+                  content: const Text(
+                      "Congratulations! You earned the 'Beginner Explorer' badge."),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text("OK"),
+                    ),
+                  ],
+                );
+              },
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print("Error checking badge: $e");
+    }
+  }
+
   void _showNotificationDialog(String? title, String? body) {
     if (title == null || body == null) return;
 
@@ -289,6 +354,11 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
                         ElevatedButton(
                           onPressed: () {
                             widget.onSubtopicFinished(); // Mark as finished
+                            _checkBadge(
+                                widget.userId,
+                                widget.topic,
+                                widget.subtopic,
+                                context); // ✅ Check badge using _badgeService
                             Navigator.pop(
                                 context); // ✅ Return to Subtopic List instead of moving to next subtopic
                             _scheduleReminder(); // ✅ Start Reminder for Foreground
