@@ -1,3 +1,7 @@
+//badge firebaseil update aavnn ind but usern kanan pattoola. should change the dialog box.
+//if no wrong answers review button ozhivakkanam. ippo error aan.
+//prompt matti kurach subtopics aakkan nokkam
+
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -5,6 +9,8 @@ import 'weekly_leaderboard.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import 'pathgen.dart';
+import 'services/badge service.dart';
+import 'main.dart';
 import 'reviewqstns.dart';
 import 'pathdisplay.dart';
 
@@ -97,11 +103,11 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         "Focus on the following subtopics: $subtopicsString. "
         "Each question must be structured as follows:"
         "qstn: [Question text]\n"
-        "opt: [Option1], [Option2], [Option3], [Option4]\n"
+        "opt: [Option1]_[Option2]_[Option3]_[Option4]\n"
         "ans: [Correct Option (exact match from opt)]\n"
         "sub: [Subtopic]\n\n"
         "Ensure that:\n"
-        "- Options are comma-separated.\n"
+        "- Options are underscore-separated.\n"
         "- The correct answer appears exactly as listed in 'opt'.\n"
         "- No additional text is provided.";
   }
@@ -148,7 +154,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         }
         currentQuestion['qstn'] = line.substring(5).trim();
       } else if (line.startsWith('opt:')) {
-        var options = line.substring(4).trim().split(',');
+        var options = line.substring(4).trim().split('_');
         options = options.map((opt) => opt.trim()).toList();
         if (options.length != 4) {
           print("⚠️ Warning: Incorrect options format - $options");
@@ -220,58 +226,47 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     String message;
     List<Widget> actions = [];
     bool streakModified = false;
+    bool passed = (_score / _questions.length) * 100 >= 80;
+    bool hasIncorrectAnswers = _incorrectQuestions.isNotEmpty;
 
-//SCORE CALCULATION
-    if ((_score / _questions.length) * 100 < 80) {
-      // User failed, show review message
+// SCORE CALCULATION
+    if (!passed) {
       message = 'Sorry! Your score is below 80%.\n\n'
           'Your Score: $_score / ${_questions.length} '
           '(${(_score / _questions.length * 100).toStringAsFixed(1)}%)\n\n'
           'Please review the chapter and try again.';
 
-      actions.add(
-        TextButton(
-          onPressed: () {
-            Navigator.pop(context); // Close dialog
-            Navigator.pop(context); // Go back to the previous screen
-          },
-          child: Text('OK'),
-        ),
-      );
-      actions.add(
-        ElevatedButton(
-          onPressed: () {
-            Navigator.pop(context); // Close dialog
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    ReviewScreen(incorrectQuestions: _incorrectQuestions),
-              ),
-            );
-          },
-          child: Text('Review'),
-        ),
-      );
+      actions.add(TextButton(
+        onPressed: () {
+          Navigator.pop(context);
+          Navigator.pop(context);
+        },
+        child: Text('OK'),
+      ));
     } else {
-      // User passed, show review option
-      message = 'Congratulations! You passed!'
+      message = 'Congratulations! You passed!\n'
           'Your Score: $_score / ${_questions.length} '
-          '(${(_score / _questions.length * 100).toStringAsFixed(1)}%)\n\n'
-          'Would you like to review incorrect answers?';
+          '(${(_score / _questions.length * 100).toStringAsFixed(1)}%)';
+      final badgeService = BadgeService(widget.userId);
+      List<String> earnedBadges = await badgeService.checkAndAwardBadges(
+          _score, _questions.length, _stopwatch.elapsedMilliseconds);
 
-      actions.add(
-        TextButton(
+      if (earnedBadges.isNotEmpty) {
+        message += "\n🏅 Badge Earned:\n${earnedBadges.join('\n')}";
+      }
+
+      // Add actions
+      actions.add(TextButton(
+        onPressed: () {
+          Navigator.pop(context);
+        },
+        child: Text('OK'),
+      ));
+
+      if (hasIncorrectAnswers) {
+        actions.add(ElevatedButton(
           onPressed: () {
-            Navigator.pop(context); // Close dialog
-          },
-          child: Text('No'),
-        ),
-      );
-      actions.add(
-        ElevatedButton(
-          onPressed: () {
-            Navigator.pop(context); // Close dialog
+            Navigator.pop(context);
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -281,12 +276,33 @@ class _ChapterQuizState extends State<ChapterQuiz> {
             );
           },
           child: Text('Review'),
-        ),
-      );
+        ));
+      }
     }
 
-//SCORE CHECK AND FIRSTORE
-    double scorePercentage = (_score / _questions.length) * 100;
+    // Show Dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Quiz Completed'),
+        content: Text(message),
+        actions: actions,
+      ),
+    );
+
+// FIRESTORE UPDATES AND STREAK LOGIC
+    await _updateFirestore(passed);
+    streakModified = await _updateDailyStreak(
+        FirebaseFirestore.instance.collection('users').doc(widget.userId));
+
+    if (streakModified) {
+      print("🔥 Streak Updated!");
+    }
+  }
+
+// FIRESTORE UPDATES
+  Future<void> _updateFirestore(bool passed) async {
     final firestore = FirebaseFirestore.instance;
     final userRef = firestore.collection('users').doc(widget.userId);
     Map<String, dynamic> subtopicScores = {};
@@ -330,90 +346,56 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       print("Error updating Firestore: $e");
     }
 
-    int totalScore = 0;
-    final chapterQuizSnapshot = await userRef.collection('chapterQuiz').get();
-    for (var doc in chapterQuizSnapshot.docs) {
-      final dynamic score = doc.data()['score'];
-      if (score is num) totalScore += score.toInt();
-    }
-
-    await userRef.set({'totalPoints': totalScore}, SetOptions(merge: true));
-    streakModified = await _updateDailyStreak(userRef);
-    int failCount = 0;
-    if (scorePercentage < 80) {
+    if (!passed) {
       await userRef.collection('learningPath').doc(widget.topic).update({
         'completed': false,
-        'failcount': failCount + 1,
+        'failcount': FieldValue.increment(1),
         'weakSubtopics': weakSubtopics.toSet().toList(),
       });
 
-      // Run the learning path modification in the background
-      Future.microtask(() async {
-        final generator = LearningPathGenerator();
-        await generator.generateOrModifyLearningPath(
-          topic: widget.topic,
-          weakSubtopics: weakSubtopics,
-        );
-      });
+      final generator = LearningPathGenerator();
+      await generator.generateOrModifyLearningPath(
+        topic: widget.topic,
+        weakSubtopics: weakSubtopics,
+      );
     } else {
-      try {
-        await updateLeaderboard(widget.userId, widget.topic, _score);
-        await userRef.collection('learningPath').doc(widget.topic).update({
-          'completed': true,
-          'generateSimplerSubtopics': false,
-          'weakSubtopics': [],
-        });
-      } catch (e) {
-        print("Error updating Firestore: $e");
-      }
+      await updateLeaderboard(widget.userId, widget.topic, _score);
+      await userRef.collection('learningPath').doc(widget.topic).update({
+        'completed': true,
+        'failcount': 0,
+        'weakSubtopics': [],
+      });
     }
-
-    if (streakModified) {
-      message += "\n\n🔥 Streak Updated!";
-    }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text('Quiz Completed'),
-        content: Text(message),
-        actions: actions,
-      ),
-    );
   }
 
+// ROLLING STREAK LOGIC
   Future<bool> _updateDailyStreak(DocumentReference userRef) async {
-    final today = DateTime.now();
-    final todayDate = DateTime(today.year, today.month, today.day);
+    final now = DateTime.now();
     bool streakUpdated = false;
 
     try {
       final userDoc = await userRef.get();
       final data = userDoc.data() as Map<String, dynamic>?;
 
-      if (data != null && data.containsKey('lastActiveDate')) {
-        final lastActive = DateTime.parse(data['lastActiveDate']);
-        final lastDate =
-            DateTime(lastActive.year, lastActive.month, lastActive.day);
+      if (data != null && data.containsKey('lastActiveTimestamp')) {
+        final lastActive = DateTime.parse(data['lastActiveTimestamp']);
         int streak = data['streak'] ?? 0;
 
-        if (todayDate.difference(lastDate).inDays == 1) {
+        if (now.difference(lastActive).inHours < 24) {
           streak += 1;
           streakUpdated = true;
-        } else if (todayDate.difference(lastDate).inDays > 1) {
+        } else {
           streak = 1;
           streakUpdated = true;
         }
-
         await userRef.set({
           'streak': streak,
-          'lastActiveDate': todayDate.toIso8601String(),
+          'lastActiveTimestamp': now.toIso8601String(),
         }, SetOptions(merge: true));
       } else {
         await userRef.set({
           'streak': 1,
-          'lastActiveDate': todayDate.toIso8601String(),
+          'lastActiveTimestamp': now.toIso8601String(),
         }, SetOptions(merge: true));
         streakUpdated = true;
       }
@@ -441,13 +423,13 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            /*           Text(
+            Text(
               'Total Time: ${(_stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)} seconds',
               style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Colors.blue),
-            ),*/
+            ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
