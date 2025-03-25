@@ -247,17 +247,21 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       message = 'Congratulations! You passed!\n'
           'Your Score: $_score / ${_questions.length} '
           '(${(_score / _questions.length * 100).toStringAsFixed(1)}%)';
-      final badgeService = BadgeService(widget.userId);
-      List<String> earnedBadges = await badgeService.checkAndAwardBadges(
-          _score, _questions.length, _stopwatch.elapsedMilliseconds);
+      //final badgeService = BadgeService(widget.userId,navigatorKey);
+      List<String> earnedBadges =
+          await BadgeService(widget.userId, navigatorKey)
+              .checkAndAwardQuizBadges(
+                  _score, _questions.length, _stopwatch.elapsedMilliseconds);
 
       if (earnedBadges.isNotEmpty) {
         message += "\n🏅 Badge Earned:\n${earnedBadges.join('\n')}";
       }
+      widget.onQuizFinished();
 
       // Add actions
       actions.add(TextButton(
         onPressed: () {
+          Navigator.pop(context);
           Navigator.pop(context);
         },
         child: Text('OK'),
@@ -371,6 +375,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
 // ROLLING STREAK LOGIC
   Future<bool> _updateDailyStreak(DocumentReference userRef) async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day); // Store only date
     bool streakUpdated = false;
 
     try {
@@ -379,29 +384,40 @@ class _ChapterQuizState extends State<ChapterQuiz> {
 
       if (data != null && data.containsKey('lastActiveTimestamp')) {
         final lastActive = DateTime.parse(data['lastActiveTimestamp']);
+        final lastActiveDate =
+            DateTime(lastActive.year, lastActive.month, lastActive.day);
         int streak = data['streak'] ?? 0;
+        int daysDifference = today.difference(lastActiveDate).inDays;
 
-        if (now.difference(lastActive).inHours < 24) {
+        if (daysDifference == 0) {
+          print("✅ User already active today. Streak remains: $streak");
+          return false; // No update needed
+        } else if (daysDifference == 1) {
+          print("🔥 Streak continued! Increasing streak.");
           streak += 1;
           streakUpdated = true;
         } else {
+          print("❌ Streak reset. More than 1 day gap.");
           streak = 1;
           streakUpdated = true;
         }
+
         await userRef.set({
           'streak': streak,
-          'lastActiveTimestamp': now.toIso8601String(),
+          'lastActiveTimestamp': today.toIso8601String(), // Store only the date
         }, SetOptions(merge: true));
       } else {
+        print("🎉 First-time activity, starting new streak.");
         await userRef.set({
           'streak': 1,
-          'lastActiveTimestamp': now.toIso8601String(),
+          'lastActiveTimestamp': today.toIso8601String(),
         }, SetOptions(merge: true));
         streakUpdated = true;
       }
     } catch (e) {
-      print("Error updating streak: $e");
+      print("❌ Error updating streak: $e");
     }
+
     return streakUpdated;
   }
 

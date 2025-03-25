@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:learnloop/content.dart';
 import 'main.dart';
+import 'services/badge service.dart';
 import 'package:learnloop/quizcontent.dart';
 
 class LearningPathDisplay extends StatelessWidget {
@@ -125,8 +126,10 @@ class LearningPathDisplay extends StatelessWidget {
         builder: (context) => ChapterQuiz(
           userId: userId,
           topic: topic,
-          onQuizFinished: () => _markSubtopicCompleted(
-              context, userId, topic, subtopics, subtopic),
+          onQuizFinished: () {
+            _markSubtopicCompleted(context, userId, topic, subtopics,
+                subtopic); // Close quiz screen after completion
+          },
         ),
       ),
     );
@@ -163,110 +166,61 @@ class LearningPathDisplay extends StatelessWidget {
       print("✅ Firestore updated for subtopic completion.");
     }
 
-    // **Update Streak**
-    final userSnapshot = await userRef.get();
-    if (userSnapshot.exists) {
-      final data = userSnapshot.data();
-      int currentStreak = data?['streak'] ?? 0;
-      Timestamp? lastCompletionTimestamp = data?['lastCompletion'];
+    Future<bool> _updateDailyStreak(DocumentReference userRef) async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day); // Store only date
+      bool streakUpdated = false;
 
-      final today = DateTime.now();
-      final lastCompletionDate = lastCompletionTimestamp?.toDate();
+      try {
+        final userDoc = await userRef.get();
+        final data = userDoc.data() as Map<String, dynamic>?;
 
-      if (lastCompletionDate != null) {
-        final difference = today.difference(lastCompletionDate).inDays;
-        currentStreak = (difference <= 1) ? currentStreak + 1 : 1;
-      } else {
-        currentStreak = 1;
-      }
+        if (data != null && data.containsKey('lastActiveTimestamp')) {
+          final lastActiveDate =
+              DateTime.tryParse(data['lastActiveTimestamp'])?.toLocal();
 
-      await userRef.update({
-        'streak': currentStreak,
-        'lastCompletion': Timestamp.fromDate(today),
-      });
+          if (lastActiveDate != null) {
+            final lastDateOnly = DateTime(
+                lastActiveDate.year, lastActiveDate.month, lastActiveDate.day);
+            int streak = data['streak'] ?? 0;
+            int daysDifference = today.difference(lastDateOnly).inDays;
 
-      print("✅ Streak updated: $currentStreak days");
-    }
-
-    // **Check and Award First Subtopic Badge**
-    // **Check and Award First Subtopic Badge**
-    try {
-      print("🔍 Checking for first subtopic badge...");
-
-      // Fetch first topic that STARTS with "1."
-      QuerySnapshot topicSnapshot = await firestore
-          .collection('users')
-          .doc(userId)
-          .collection('learningPath')
-          .where(FieldPath.documentId, isGreaterThanOrEqualTo: '1.')
-          .where(FieldPath.documentId,
-              isLessThan: '2') // Ensures only "1.x" topics are considered
-          .limit(1)
-          .get();
-
-      if (topicSnapshot.docs.isEmpty) {
-        print("❌ No topics found starting with '1.'");
-        return;
-      }
-
-      DocumentSnapshot firstTopicDoc = topicSnapshot.docs.first;
-      String firstTopicId = firstTopicDoc.id;
-      List<dynamic> subtopics = firstTopicDoc['subtopics'];
-
-      if (subtopics.isEmpty) {
-        print("❌ No subtopics found for topic $firstTopicId");
-        return;
-      }
-
-      String firstSubtopicName = subtopics.first['name'];
-      print("🎯 First subtopic: $firstSubtopicName");
-
-      // Normalize and compare subtopic names
-      if (subtopic.trim().toLowerCase() ==
-          firstSubtopicName.trim().toLowerCase()) {
-        DocumentSnapshot badgeDoc = await firestore
-            .collection('users')
-            .doc(userId)
-            .collection('badges')
-            .doc('first subtopic')
-            .get();
-
-        if (!badgeDoc.exists) {
-          await firestore
-              .collection('users')
-              .doc(userId)
-              .collection('badges')
-              .doc('first subtopic')
-              .set({
-            'timestamp': Timestamp.now() // User can mark it as read later
-          });
-          print("📩 badges saved in Firestore.");
-          Future.delayed(Duration.zero, () {
-            if (navigatorKey.currentContext != null) {
-              showDialog(
-                context: navigatorKey.currentContext!,
-                builder: (BuildContext dialogContext) {
-                  return AlertDialog(
-                    title: Text("🏅 Badge Earned!"),
-                    content: Text(
-                        "🎉 Congratulations! You've earned the 'First Subtopic Completed' badge!"),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(dialogContext).pop();
-                        },
-                        child: Text("OK"),
-                      ),
-                    ],
-                  );
-                },
-              );
+            if (daysDifference == 0) {
+              print("✅ User already active today. Streak remains: $streak");
+              return false; // No update needed
+            } else if (daysDifference == 1) {
+              print("🔥 Streak continued! Increasing streak.");
+              streak += 1;
+              streakUpdated = true;
+            } else {
+              print("❌ Streak reset. More than 1 day gap.");
+              streak = 1;
+              streakUpdated = true;
             }
-          });
+
+            await userRef.set({
+              'streak': streak,
+              'lastActiveTimestamp':
+                  today.toIso8601String(), // Store only the date
+            }, SetOptions(merge: true));
+          }
+        } else {
+          print("🎉 First-time activity, starting new streak.");
+          await userRef.set({
+            'streak': 1,
+            'lastActiveTimestamp': today.toIso8601String(),
+          }, SetOptions(merge: true));
+          streakUpdated = true;
         }
+      } catch (e) {
+        print("❌ Error updating streak: $e");
       }
-    } catch (e) {
-      print("❌ Error awarding badge: $e");
+
+      return streakUpdated;
     }
+
+    // **Check and Award First Subtopic Badge**
+    await BadgeService(userId, navigatorKey)
+        .checkAndAwardSubtopicBadges(subtopic);
   }
 }

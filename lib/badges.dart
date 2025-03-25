@@ -39,10 +39,23 @@ class BadgesPage extends StatelessWidget {
               }
 
               if (!badgeSnapshot.hasData || badgeSnapshot.data!.docs.isEmpty) {
-                return const Center(child: Text("No badges earned yet!"));
+                return const Center(
+                    child: Text("START EARNING YOUR BADGES NOW!!"));
               }
 
-              var badges = badgeSnapshot.data!.docs;
+              // Group badges by base name (excluding levels)
+              Map<String, DocumentSnapshot> latestBadges = {};
+
+              for (var doc in badgeSnapshot.data!.docs) {
+                var badge = doc.data() as Map<String, dynamic>;
+                String badgeName = doc.id;
+                String baseName =
+                    badgeName.replaceAll(RegExp(r' Level \d+$'), '');
+
+                if (!latestBadges.containsKey(baseName)) {
+                  latestBadges[baseName] = doc;
+                }
+              }
 
               return Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -53,33 +66,41 @@ class BadgesPage extends StatelessWidget {
                     mainAxisSpacing: 10,
                     childAspectRatio: 1,
                   ),
-                  itemCount: badges.length,
+                  itemCount: latestBadges.length,
                   itemBuilder: (context, index) {
-                    var badge = badges[index].data() as Map<String, dynamic>;
+                    var badgeDoc = latestBadges.values.elementAt(index);
+                    var badge = badgeDoc.data() as Map<String, dynamic>;
+                    String criteria =
+                        badge['criteria'] ?? 'No criteria available';
 
                     return Card(
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                       elevation: 3,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.emoji_events,
-                              size: 50, color: Colors.orange),
-                          const SizedBox(height: 10),
-                          Text(
-                            badge['name'] ?? "Unknown Badge",
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            "Earned on: ${badge['earnedAt']?.toDate().toString().split(' ')[0] ?? 'Unknown'}",
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.grey),
-                          ),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.emoji_events,
+                                size: 50, color: Colors.orange),
+                            const SizedBox(height: 10),
+                            Text(
+                              badgeDoc.id, // Display badge name
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              criteria,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.grey),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
