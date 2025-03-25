@@ -19,16 +19,15 @@ class WeeklyLeaderboard extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          print("No data available in the leaderboard collection.");
-          return const Center(child: Text("No data available"));
+            print("No data available in the leaderboard collection.");
+            return const Center(child: Text("No data available"));
           }
 
 // Continue with the rest of your code...
-
 
           final leaderboardData = snapshot.data!.docs;
           print("Fetched ${leaderboardData.length} leaderboard entries.");
@@ -37,22 +36,27 @@ class WeeklyLeaderboard extends StatelessWidget {
             padding: const EdgeInsets.all(10),
             itemCount: leaderboardData.length,
             itemBuilder: (context, index) {
-              final user = leaderboardData[index].data() as Map<String, dynamic>;
+              final user =
+                  leaderboardData[index].data() as Map<String, dynamic>;
               String username = user['Username'] ?? 'Unknown User';
               int totalPoints = user['totalPoints'] ?? 0;
 
               // Assign medal icons for top 3 users
               Widget leadingWidget;
               if (index == 0) {
-                leadingWidget = const Icon(Icons.emoji_events, color: Colors.amber, size: 40); // Gold
+                leadingWidget = const Icon(Icons.emoji_events,
+                    color: Colors.amber, size: 40); // Gold
               } else if (index == 1) {
-                leadingWidget = const Icon(Icons.emoji_events, color: Colors.grey, size: 40); // Silver
+                leadingWidget = const Icon(Icons.emoji_events,
+                    color: Colors.grey, size: 40); // Silver
               } else if (index == 2) {
-                leadingWidget = const Icon(Icons.emoji_events, color: Colors.brown, size: 40); // Bronze
+                leadingWidget = const Icon(Icons.emoji_events,
+                    color: Colors.brown, size: 40); // Bronze
               } else {
                 leadingWidget = CircleAvatar(
-                  backgroundColor: Colors.blueAccent,
-                  child: Text((index + 1).toString(), style: const TextStyle(color: Colors.white)),
+                  backgroundColor: Color.fromARGB(255, 183, 77, 183),
+                  child: Text((index + 1).toString(),
+                      style: const TextStyle(color: Colors.white)),
                 );
               }
 
@@ -66,10 +70,13 @@ class WeeklyLeaderboard extends StatelessWidget {
                   leading: leadingWidget,
                   title: Text(
                     username,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 18),
                   ),
-                  subtitle: Text('Total Points: $totalPoints', style: const TextStyle(fontSize: 16)),
-                  trailing: Icon(Icons.star, color: Colors.orangeAccent.shade700),
+                  subtitle: Text('Total Points: $totalPoints',
+                      style: const TextStyle(fontSize: 16)),
+                  trailing:
+                      Icon(Icons.star, color: Colors.orangeAccent.shade700),
                 ),
               );
             },

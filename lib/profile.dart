@@ -60,7 +60,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 children: [
                   CircleAvatar(
                     radius: 50,
-                    backgroundColor: Colors.blue,
+                    backgroundColor: Color.fromARGB(255, 183, 77, 183),
                     child: Text(
                       userName.isNotEmpty ? userName[0].toUpperCase() : "?",
                       style: const TextStyle(fontSize: 40, color: Colors.white),
@@ -73,8 +73,8 @@ class _ProfilePageState extends State<ProfilePage> {
                         fontSize: 22, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 20),
-                  _buildInfoTile("🔥 Streak", streak.toString()),
-                  _buildInfoTile("🏆 Total Points", totalPoints.toString()),
+                  _buildInfoTile("Streak", streak.toString()),
+                  _buildInfoTile("Total Points", totalPoints.toString()),
                 ],
               ),
             ),

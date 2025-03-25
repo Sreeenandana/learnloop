@@ -1,308 +1,605 @@
-//aa progress chart onn mattanam, ippo static aa
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'completed.dart';
-import 'profile.dart';
-import 'weekly_leaderboard.dart';
+import 'package:learnloop/pathdisplay.dart';
+import 'package:learnloop/profile.dart';
+import 'package:learnloop/settings.dart';
 import 'badges.dart';
-import 'pathdisplay.dart';
-//import 'services/progress.dart';
-import 'settings.dart';
+import 'package:learnloop/weekly_leaderboard.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:percent_indicator/percent_indicator.dart';
+import 'dart:async';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
-
   @override
-  State<HomePage> createState() => _HomePageState();
+  _HomePageState createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  int _selectedIndex = 0;
-
-  final List<Widget> _pages = [
-    HomeScreen(),
-    LearningPathDisplay(),
-    WeeklyLeaderboard(),
-    BadgesPage(),
-    ProfilePage(),
-    CompletedTopicsPage(),
-  ];
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: _selectedIndex == 0
-          ? AppBar(
-              title: const Text("Home"),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const SettingsPage()),
-                    );
-                  },
-                ),
-              ],
-            )
-          : null, // Show AppBar only on Home
-
-      body: _pages[_selectedIndex],
-
-      bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Path'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.emoji_events), label: 'Badges'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.deepPurple,
-        unselectedItemColor: Colors.grey,
-        backgroundColor: Colors.white,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-        selectedFontSize: 12, // Reduced font size
-        unselectedFontSize: 10, // Reduced font size
-        showSelectedLabels: true, // Ensures full label visibility
-        showUnselectedLabels: true, // Ensures full label visibility
-      ),
-    );
-  }
-}
-
-class HomeScreen extends StatefulWidget {
-  @override
-  _HomeScreenState createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  String username = "User"; // Default username
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  String username = "User";
   final User? user = FirebaseAuth.instance.currentUser;
-  double completedProgress = 0.2;
-  double inProgressProgress = 0.05;
-  double pendingProgress = 0.75;
+  Map<DateTime, double> progressData = {};
+  DateTime _focusedDay = DateTime.now();
+  CalendarFormat _calendarFormat = CalendarFormat.week;
+  int _totalSubtopics = 1;
+  int _completedSubtopics = 0;
+  String currentTopic = "Loading...";
+  String currentSubtopic = "Loading...";
+  DateTime? _sessionStartTime;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _fetchUsername();
     _fetchProgressData();
+    _fetchSubtopicProgress();
+    _fetchCurrentTopic();
+    _fetchCurrentSubtopic();
+    _startTrackingTime();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopTrackingTime();
+    super.dispose();
   }
 
   Future<void> _fetchUsername() async {
-    if (user != null) {
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .get();
-
-      if (userDoc.exists) {
-        setState(() {
-          username = userDoc['Username'] ?? "User";
-        });
-      }
+    if (user == null) return;
+    DocumentSnapshot userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .get();
+    if (userDoc.exists) {
+      setState(() {
+        username = userDoc['Username'] ?? "User";
+      });
     }
   }
 
   Future<void> _fetchProgressData() async {
-    double completed = await fetchCompletedProgress();
-    double inProgress = await fetchInProgressProgress();
-    double total = completed + inProgress;
-
-    setState(() {
-      completedProgress = total > 0 ? completed / total : 0.0;
-      inProgressProgress = total > 0 ? inProgress / total : 0.0;
-    });
-  }
-
-  Future<double> fetchCompletedProgress() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print("User is null");
-      return 5.0;
-    }
-
+    if (user == null) return;
     final learningPathRef = FirebaseFirestore.instance
         .collection('users')
-        .doc(user.uid)
+        .doc(user!.uid)
         .collection('learningPath');
 
     QuerySnapshot learningPathSnapshot = await learningPathRef.get();
-
-    if (learningPathSnapshot.docs.isEmpty) {
-      return 0.0; // No topics in learning path
-    }
-
-    int completedSubtopics = 0;
-    int totalSubtopics = 0;
+    Map<DateTime, double> dailyMinutes = {};
 
     for (var doc in learningPathSnapshot.docs) {
       List<dynamic> subtopics = doc['subtopics'] ?? [];
+      for (var sub in subtopics) {
+        if (sub['status'] == 'completed' && sub.containsKey('completedAt')) {
+          Timestamp? timestamp = sub['completedAt'];
+          double timeSpent = (sub['timeSpent'] ?? 0).toDouble();
 
+          if (timestamp != null) {
+            DateTime date = timestamp.toDate();
+            DateTime dayKey = DateTime(date.year, date.month, date.day);
+            dailyMinutes[dayKey] = (dailyMinutes[dayKey] ?? 0) + timeSpent;
+          }
+        }
+      }
+    }
+
+    setState(() {
+      progressData = dailyMinutes;
+    });
+  }
+
+  Future<void> _fetchSubtopicProgress() async {
+    if (user == null) return;
+    final learningPathRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .collection('learningPath');
+
+    QuerySnapshot learningPathSnapshot = await learningPathRef.get();
+    int totalSubtopics = 0;
+    int completedSubtopics = 0;
+
+    for (var doc in learningPathSnapshot.docs) {
+      List<dynamic> subtopics = doc['subtopics'] ?? [];
       totalSubtopics += subtopics.length;
       completedSubtopics +=
           subtopics.where((sub) => sub['status'] == 'completed').length;
     }
 
-    if (totalSubtopics == 0) return 0.0; // Avoid division by zero
-
-    return completedSubtopics /
-        totalSubtopics; // Returns progress as a fraction
+    setState(() {
+      _totalSubtopics = totalSubtopics > 0 ? totalSubtopics : 1;
+      _completedSubtopics = completedSubtopics;
+    });
   }
 
-  Future<double> fetchInProgressProgress() async {
-    if (user == null) return 0.0;
-
-    DocumentSnapshot userDoc = await FirebaseFirestore.instance
+  Future<void> _fetchCurrentTopic() async {
+    if (user == null) return;
+    final learningPathRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user!.uid)
-        .get();
+        .collection('learningPath');
 
-    if (userDoc.exists) {
-      return (userDoc['inProgressProgress'] as num?)?.toDouble() ?? 0.0;
+    QuerySnapshot learningPathSnapshot = await learningPathRef.get();
+    String topic = "All topics completed!";
+    for (var doc in learningPathSnapshot.docs) {
+      List<dynamic> subtopics = doc['subtopics'] ?? [];
+      if (subtopics.any((sub) => sub['status'] != 'completed')) {
+        topic = doc.id;
+        break;
+      }
     }
-    return 0.0;
+    setState(() {
+      currentTopic = topic;
+    });
+  }
+
+  Future<void> _fetchCurrentSubtopic() async {
+    if (user == null) return;
+    final learningPathRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .collection('learningPath');
+
+    QuerySnapshot learningPathSnapshot = await learningPathRef.get();
+    String subtopic = "All subtopics completed!";
+    for (var doc in learningPathSnapshot.docs) {
+      List<dynamic> subtopics = doc['subtopics'] ?? [];
+      for (var sub in subtopics) {
+        if (sub['status'] != 'completed') {
+          subtopic = sub['name'] ?? "Unknown Subtopic";
+          break;
+        }
+      }
+    }
+    setState(() {
+      currentSubtopic = subtopic;
+    });
+  }
+
+  void _startTrackingTime() {
+    _sessionStartTime = DateTime.now();
+  }
+
+  void _stopTrackingTime() async {
+    if (_sessionStartTime == null || user == null) return;
+    DateTime now = DateTime.now();
+    Duration sessionDuration = now.difference(_sessionStartTime!);
+    double minutesSpent = sessionDuration.inMinutes.toDouble();
+
+    String docId =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+    DocumentReference progressRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .collection('dailyProgress')
+        .doc(docId);
+
+    await progressRef.set({
+      'date': now,
+      'timeSpent': FieldValue.increment(minutesSpent),
+    }, SetOptions(merge: true));
   }
 
   @override
   Widget build(BuildContext context) {
+    double progress = _completedSubtopics / _totalSubtopics;
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        actions: [
+          IconButton(
+            icon: Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => SettingsPage()),
+              );
+            },
+          ),
+        ],
+        backgroundColor:
+            Color.fromARGB(255, 183, 77, 183), // Customize the AppBar color
+      ),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          // HomePage content: You can display the username and progress details
+          Padding(
+            padding: const EdgeInsets.all(5.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 🟣 Welcome Banner
+                // Welcome message
+                Text(
+                  "Welcome, $username!",
+                  style: TextStyle(
+                    fontSize: 32, // Larger font size for the welcome message
+                    fontWeight: FontWeight.bold,
+                    color: Color.fromARGB(255, 145, 21, 145),
+                  ),
+                ),
+                SizedBox(height: 5),
+                // Progress Indicator
+                Center(
+                  child: CircularPercentIndicator(
+                    radius: 50.0,
+                    lineWidth: 5.0,
+                    percent: progress,
+                    center: Text(
+                      "${(progress * 100).toStringAsFixed(1)}%",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.deepPurple,
+                      ),
+                    ),
+                    progressColor: Colors.green,
+                    backgroundColor: Colors.grey,
+                  ),
+                ),
+                SizedBox(height: 20),
+                // Topic and Subtoic details
+                Text(
+                  "Current Topic: $currentTopic",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                SizedBox(height: 10),
+                Text(
+                  "Current Subtopic: $currentSubtopic",
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.black54,
+                  ),
+                ),
+                SizedBox(height: 30),
+                // Calendar widget
                 Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
+                  margin: EdgeInsets.all(10),
+                  padding: EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFdda0dd),
-                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(color: Colors.grey.shade300, blurRadius: 6),
+                    ],
                   ),
-                  child: Text(
-                    "Welcome Back, $username!",
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                  child: TableCalendar(
+                    firstDay: DateTime.utc(2025, 1, 1),
+                    lastDay: DateTime.utc(2025, 12, 31),
+                    focusedDay: _focusedDay,
+                    calendarFormat: _calendarFormat,
+                    onDaySelected: (selectedDay, focusedDay) {
+                      setState(() {
+                        _focusedDay = focusedDay;
+                      });
+                    },
                   ),
                 ),
-
-                const SizedBox(height: 20),
-
-                // 🔵 Grid View with Circular Progress Indicators
-                GridView.count(
-                  shrinkWrap: true, // ✅ Prevents overflow
-                  physics:
-                      const NeverScrollableScrollPhysics(), // ✅ Avoids nested scrolling issues
-                  crossAxisCount: 2, // 3 items per row
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  children: [
-                    _buildProgressCard(
-                      "Completed",
-                      Icons.check_circle,
-                      completedProgress,
-                      Colors.purple,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => CompletedTopicsPage()),
-                        );
-                      },
-                    ),
-                    _buildProgressCard(
-                      "In Progress",
-                      Icons.sync,
-                      inProgressProgress,
-                      Colors.blue,
-                    ),
-                    _buildProgressCard(
-                      "Pending",
-                      Icons.pending,
-                      pendingProgress,
-                      Colors.grey,
-                    ),
-                  ],
-                ),
+                SizedBox(height: 20),
+                // Other content like Learning Path, Leaderboard, etc.
+                Expanded(child: LearningPathDisplay()),
+                Expanded(child: WeeklyLeaderboard()),
+                Expanded(child: BadgesPage()),
+                Expanded(child: ProfilePage()),
               ],
             ),
           ),
-        ),
+          LearningPathDisplay(),
+          WeeklyLeaderboard(),
+          BadgesPage(),
+          ProfilePage(),
+        ],
       ),
-    );
-  }
-
-  // 🎯 Circular Progress Card Builder
-  Widget _buildProgressCard(
-      String title, IconData icon, double progress, Color color,
-      {VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.3),
-              blurRadius: 8,
-              spreadRadius: 2,
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  height: 70,
-                  width: 70,
-                  child: CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 8,
-                    backgroundColor: Colors.grey[300],
-                    color: color,
-                  ),
-                ),
-                Text(
-                  "${(progress * 100).toInt()}%",
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Icon(icon, size: 30, color: color),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        items: [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: ' '),
+          BottomNavigationBarItem(icon: Icon(Icons.route), label: ' '),
+          BottomNavigationBarItem(icon: Icon(Icons.leaderboard), label: ' '),
+          BottomNavigationBarItem(icon: Icon(Icons.badge), label: ' '),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: ' '),
+        ],
+        selectedItemColor: Color.fromARGB(255, 183, 77, 183),
+        unselectedItemColor: Colors.grey,
+        backgroundColor: Colors.white,
+        type: BottomNavigationBarType.fixed,
       ),
     );
   }
 }
+
+
+/*import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:learnloop/pathdisplay.dart';
+import 'package:learnloop/profile.dart';
+import 'package:learnloop/settings.dart';
+import 'badges.dart';
+import 'package:learnloop/weekly_leaderboard.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:percent_indicator/percent_indicator.dart';
+import 'dart:async';
+
+class HomePage extends StatefulWidget {
+  @override
+  _HomePageState createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  String username = "User";
+  final User? user = FirebaseAuth.instance.currentUser;
+  Map<DateTime, double> progressData = {};
+  DateTime _focusedDay = DateTime.now();
+  CalendarFormat _calendarFormat = CalendarFormat.week;
+  int _totalSubtopics = 1;
+  int _completedSubtopics = 0;
+  String currentTopic = "Loading...";
+  String currentSubtopic = "Loading...";
+  DateTime? _sessionStartTime;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _fetchUsername();
+    _fetchProgressData();
+    _fetchSubtopicProgress();
+    _fetchCurrentTopic();
+    _fetchCurrentSubtopic();
+    _startTrackingTime();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopTrackingTime();
+    super.dispose();
+  }
+
+  Future<void> _fetchUsername() async {
+    if (user == null) return;
+    DocumentSnapshot userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .get();
+    if (userDoc.exists) {
+      setState(() {
+        username = userDoc['Username'] ?? "User";
+      });
+    }
+  }
+
+  Future<void> _fetchProgressData() async {
+    if (user == null) return;
+    final learningPathRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .collection('learningPath');
+
+    QuerySnapshot learningPathSnapshot = await learningPathRef.get();
+    Map<DateTime, double> dailyMinutes = {};
+
+    for (var doc in learningPathSnapshot.docs) {
+      List<dynamic> subtopics = doc['subtopics'] ?? [];
+      for (var sub in subtopics) {
+        if (sub['status'] == 'completed' && sub.containsKey('completedAt')) {
+          Timestamp? timestamp = sub['completedAt'];
+          double timeSpent = (sub['timeSpent'] ?? 0).toDouble();
+
+          if (timestamp != null) {
+            DateTime date = timestamp.toDate();
+            DateTime dayKey = DateTime(date.year, date.month, date.day);
+            dailyMinutes[dayKey] = (dailyMinutes[dayKey] ?? 0) + timeSpent;
+          }
+        }
+      }
+    }
+
+    setState(() {
+      progressData = dailyMinutes;
+    });
+  }
+
+  Future<void> _fetchSubtopicProgress() async {
+    if (user == null) return;
+    final learningPathRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .collection('learningPath');
+
+    QuerySnapshot learningPathSnapshot = await learningPathRef.get();
+    int totalSubtopics = 0;
+    int completedSubtopics = 0;
+
+    for (var doc in learningPathSnapshot.docs) {
+      List<dynamic> subtopics = doc['subtopics'] ?? [];
+      totalSubtopics += subtopics.length;
+      completedSubtopics +=
+          subtopics.where((sub) => sub['status'] == 'completed').length;
+    }
+
+    setState(() {
+      _totalSubtopics = totalSubtopics > 0 ? totalSubtopics : 1;
+      _completedSubtopics = completedSubtopics;
+    });
+  }
+
+  Future<void> _fetchCurrentTopic() async {
+    if (user == null) return;
+    final learningPathRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .collection('learningPath');
+
+    QuerySnapshot learningPathSnapshot = await learningPathRef.get();
+    String topic = "All topics completed!";
+    for (var doc in learningPathSnapshot.docs) {
+      List<dynamic> subtopics = doc['subtopics'] ?? [];
+      if (subtopics.any((sub) => sub['status'] != 'completed')) {
+        topic = doc.id;
+        break;
+      }
+    }
+    setState(() {
+      currentTopic = topic;
+    });
+  }
+
+  Future<void> _fetchCurrentSubtopic() async {
+    if (user == null) return;
+    final learningPathRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .collection('learningPath');
+
+    QuerySnapshot learningPathSnapshot = await learningPathRef.get();
+    String subtopic = "All subtopics completed!";
+    for (var doc in learningPathSnapshot.docs) {
+      List<dynamic> subtopics = doc['subtopics'] ?? [];
+      for (var sub in subtopics) {
+        if (sub['status'] != 'completed') {
+          subtopic = sub['name'] ?? "Unknown Subtopic";
+          break;
+        }
+      }
+    }
+    setState(() {
+      currentSubtopic = subtopic;
+    });
+  }
+
+  void _startTrackingTime() {
+    _sessionStartTime = DateTime.now();
+  }
+
+  void _stopTrackingTime() async {
+    if (_sessionStartTime == null || user == null) return;
+    DateTime now = DateTime.now();
+    Duration sessionDuration = now.difference(_sessionStartTime!);
+    double minutesSpent = sessionDuration.inMinutes.toDouble();
+
+    String docId =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+    DocumentReference progressRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .collection('dailyProgress')
+        .doc(docId);
+
+    await progressRef.set({
+      'date': now,
+      'timeSpent': FieldValue.increment(minutesSpent),
+    }, SetOptions(merge: true));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    double progress = _completedSubtopics / _totalSubtopics;
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        title: Text("Home"),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (context) => SettingsPage()));
+            },
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text("Welcome, $username",
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              SizedBox(height: 20),
+              CircularPercentIndicator(
+                  radius: 120.0,
+                  lineWidth: 13.0,
+                  animation: true,
+                  percent: progress,
+                  center: Text(
+                      "${(_completedSubtopics / _totalSubtopics * 100).toInt()}%"),
+                  progressColor: Colors.blue),
+              SizedBox(height: 20),
+              Text("Current Subtopic: $currentSubtopic",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+              SizedBox(height: 30),
+              Container(
+                margin: EdgeInsets.all(10),
+                padding: EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(color: Colors.grey.shade300, blurRadius: 6)
+                    ]),
+                child: TableCalendar(
+                    firstDay: DateTime.utc(2025, 1, 1),
+                    lastDay: DateTime.utc(2025, 12, 31),
+                    focusedDay: _focusedDay,
+                    calendarFormat: _calendarFormat,
+                    onDaySelected: (selectedDay, focusedDay) {
+                      setState(() {
+                        _focusedDay = focusedDay;
+                      });
+                    }),
+              ),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 0, // Set this dynamically based on the selected tab
+        onTap: (index) {
+          if (index == 1) {
+            Navigator.push(context,
+                MaterialPageRoute(builder: (context) => LearningPathDisplay()));
+          } else if (index == 2) {
+            Navigator.push(context,
+                MaterialPageRoute(builder: (context) => WeeklyLeaderboard()));
+          } else if (index == 3) {
+            Navigator.push(
+                context, MaterialPageRoute(builder: (context) => BadgesPage()));
+          } else if (index == 4) {
+            Navigator.push(context,
+                MaterialPageRoute(builder: (context) => ProfilePage()));
+          }
+        },
+        items: [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.route), label: 'Path'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
+          BottomNavigationBarItem(icon: Icon(Icons.badge), label: 'Badge'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        ],
+        selectedItemColor: Colors.deepPurple,
+        unselectedItemColor: Colors.grey,
+        backgroundColor: Colors.white,
+        type: BottomNavigationBarType.fixed,
+      ),
+    );
+  }
+} 
+*/
