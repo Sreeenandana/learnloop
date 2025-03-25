@@ -59,7 +59,7 @@ class _HomePageState extends State<HomePage> {
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Learning Path'),
+          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Path'),
           BottomNavigationBarItem(icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
           BottomNavigationBarItem(icon: Icon(Icons.emoji_events), label: 'Badges'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
@@ -70,6 +70,10 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: Colors.white,
         onTap: _onItemTapped,
         type: BottomNavigationBarType.fixed,
+        selectedFontSize: 12, // Reduced font size
+        unselectedFontSize: 10, // Reduced font size
+        showSelectedLabels: true, // Ensures full label visibility
+        showUnselectedLabels: true, // Ensures full label visibility
       ),
     );
   }
