@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'completed.dart';
 import 'profile.dart';
 import 'weekly_leaderboard.dart';
 import 'badges.dart';
 import 'pathdisplay.dart';
-//import 'services/progress.dart';
 import 'settings.dart';
+import 'package:intl/intl.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -53,18 +54,14 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             )
-          : null, // Show AppBar only on Home
-
+          : null,
       body: _pages[_selectedIndex],
-
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Path'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.emoji_events), label: 'Badges'),
+          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Learning Path'),
+          BottomNavigationBarItem(icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
+          BottomNavigationBarItem(icon: Icon(Icons.emoji_events), label: 'Badges'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
         currentIndex: _selectedIndex,
@@ -73,10 +70,6 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: Colors.white,
         onTap: _onItemTapped,
         type: BottomNavigationBarType.fixed,
-        selectedFontSize: 12, // Reduced font size
-        unselectedFontSize: 10, // Reduced font size
-        showSelectedLabels: true, // Ensures full label visibility
-        showUnselectedLabels: true, // Ensures full label visibility
       ),
     );
   }
@@ -88,12 +81,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String username = "User"; // Default username
+  String username = "User";
   final User? user = FirebaseAuth.instance.currentUser;
-  double completedProgress = 0.2;
-  double inProgressProgress = 0.05;
-  double pendingProgress = 0.75;
-
+  List<FlSpot> progressData1 = [FlSpot(0, 0)];
+  List<FlSpot> progressData2 = [FlSpot(0, 0)];
+  Map<double, String> xAxisLabels = {};
+  String selectedYear = "2025";
+  
   @override
   void initState() {
     super.initState();
@@ -107,7 +101,6 @@ class _HomeScreenState extends State<HomeScreen> {
           .collection('users')
           .doc(user!.uid)
           .get();
-
       if (userDoc.exists) {
         setState(() {
           username = userDoc['Username'] ?? "User";
@@ -117,189 +110,112 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _fetchProgressData() async {
-    double completed = await fetchCompletedProgress();
-    double inProgress = await fetchInProgressProgress();
-    double total = completed + inProgress;
-
-    setState(() {
-      completedProgress = total > 0 ? completed / total : 0.0;
-      inProgressProgress = total > 0 ? inProgress / total : 0.0;
-    });
-  }
-
-  Future<double> fetchCompletedProgress() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print("User is null");
-      return 5.0;
-    }
-
     final learningPathRef = FirebaseFirestore.instance
         .collection('users')
-        .doc(user.uid)
+        .doc(user!.uid)
         .collection('learningPath');
 
     QuerySnapshot learningPathSnapshot = await learningPathRef.get();
-
-    if (learningPathSnapshot.docs.isEmpty) {
-      return 0.0; // No topics in learning path
-    }
-
-    int completedSubtopics = 0;
-    int totalSubtopics = 0;
+    List<FlSpot> data1 = [];
+    List<FlSpot> data2 = [];
+    Map<double, String> xLabels = {
+      1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+      7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
+    };
 
     for (var doc in learningPathSnapshot.docs) {
       List<dynamic> subtopics = doc['subtopics'] ?? [];
-
-      totalSubtopics += subtopics.length;
-      completedSubtopics +=
-          subtopics.where((sub) => sub['status'] == 'completed').length;
+      for (var sub in subtopics) {
+        if (sub['status'] == 'completed') {
+          Timestamp? timestamp = sub['completedAt'];
+          if (timestamp != null) {
+            DateTime date = timestamp.toDate();
+            if (date.year.toString() == selectedYear) {
+              double month = date.month.toDouble();
+              double progress = (data1.length % 20) * 1000 + 5000;
+              data1.add(FlSpot(month, progress));
+              data2.add(FlSpot(month, progress - 2000));
+            }
+          }
+        }
+      }
     }
 
-    if (totalSubtopics == 0) return 0.0; // Avoid division by zero
-
-    return completedSubtopics /
-        totalSubtopics; // Returns progress as a fraction
-  }
-
-  Future<double> fetchInProgressProgress() async {
-    if (user == null) return 0.0;
-
-    DocumentSnapshot userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user!.uid)
-        .get();
-
-    if (userDoc.exists) {
-      return (userDoc['inProgressProgress'] as num?)?.toDouble() ?? 0.0;
-    }
-    return 0.0;
+    setState(() {
+      progressData1 = data1.isNotEmpty ? data1 : [FlSpot(1, 5000)];
+      progressData2 = data2.isNotEmpty ? data2 : [FlSpot(1, 3000)];
+      xAxisLabels = xLabels;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[100],
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 🟣 Welcome Banner
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Welcome, $username", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12), // Reduced padding for smaller screens
                   decoration: BoxDecoration(
-                    color: const Color(0xFFdda0dd),
-                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(15), // Slightly smaller for mobile
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.15),
+                        blurRadius: 8,
+                        spreadRadius: 2,
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    "Welcome Back, $username!",
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                  child: LineChart(
+                    LineChartData(
+                      minX: 1,
+                      maxX: 12,
+                      minY: 0,
+                      maxY: 20000,
+                      gridData: FlGridData(show: true),
+                      titlesData: FlTitlesData(
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              return Text(
+                                xAxisLabels[value.toInt()] ?? "",
+                                style: TextStyle(fontSize: 10), // Reduced font size
+                              );
+                            },
+                          ),
+                        ),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true, 
+                            reservedSize: 32,
+                            getTitlesWidget: (value, meta) {
+                              return Text(
+                              "${value ~/ 1000}K",
+                              style: TextStyle(fontSize: 10), // Smaller text
+                            );
+                          },
+                        ),
+                      ),
+                      ),
+                      lineBarsData: [
+                        LineChartBarData(spots: progressData1, isCurved: true, color: Colors.blue, barWidth: 2),
+                        LineChartBarData(spots: progressData2, isCurved: true, color: Colors.green, barWidth: 2),
+                      ],
                     ),
                   ),
                 ),
-
-                const SizedBox(height: 20),
-
-                // 🔵 Grid View with Circular Progress Indicators
-                GridView.count(
-                  shrinkWrap: true, // ✅ Prevents overflow
-                  physics:
-                      const NeverScrollableScrollPhysics(), // ✅ Avoids nested scrolling issues
-                  crossAxisCount: 2, // 3 items per row
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  children: [
-                    _buildProgressCard(
-                      "Completed",
-                      Icons.check_circle,
-                      completedProgress,
-                      Colors.purple,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => CompletedTopicsPage()),
-                        );
-                      },
-                    ),
-                    _buildProgressCard(
-                      "In Progress",
-                      Icons.sync,
-                      inProgressProgress,
-                      Colors.blue,
-                    ),
-                    _buildProgressCard(
-                      "Pending",
-                      Icons.pending,
-                      pendingProgress,
-                      Colors.grey,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ),
-      ),
-    );
-  }
-
-  // 🎯 Circular Progress Card Builder
-  Widget _buildProgressCard(
-      String title, IconData icon, double progress, Color color,
-      {VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.3),
-              blurRadius: 8,
-              spreadRadius: 2,
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  height: 70,
-                  width: 70,
-                  child: CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 8,
-                    backgroundColor: Colors.grey[300],
-                    color: color,
-                  ),
-                ),
-                Text(
-                  "${(progress * 100).toInt()}%",
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Icon(icon, size: 30, color: color),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-          ],
         ),
       ),
     );
