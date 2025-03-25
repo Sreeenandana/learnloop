@@ -106,30 +106,38 @@ class LearningPathGenerator {
     final firestore = FirebaseFirestore.instance;
     final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: _apiKey);
 
-    final docRef = firestore
+    final userRef = firestore
         .collection('users')
         .doc(userId)
         .collection('learningPath')
         .doc(topic);
-    final docSnapshot = await docRef.get();
+    final userSnapshot = await userRef.get();
 
-    if (!docSnapshot.exists || !docSnapshot.data()!.containsKey('subtopics')) {
+    if (!userSnapshot.exists ||
+        !userSnapshot.data()!.containsKey('subtopics')) {
       print("Error: No subtopics found for $topic");
       return;
     }
+    final docRef = firestore
+        .collection('users')
+        .doc(userId)
+        .collection('chapterQuiz')
+        .doc(topic);
+    final docSnapshot = await docRef.get();
 
     // Check failCount
-    int failCount = docSnapshot.data()!.containsKey('failCount')
-        ? docSnapshot.data()!['failCount'] as int
+    int attempts = docSnapshot.data()!.containsKey('attempts')
+        ? docSnapshot.data()!['attempts'] as int
         : 0;
 
-    if (failCount >= 3) {
+    if (attempts >= 3) {
       print("Fail count limit reached (3). Not modifying subtopics.");
       return;
     }
+    print("after fail");
 
     List<Map<String, dynamic>> subtopics =
-        List<Map<String, dynamic>>.from(docSnapshot.data()!['subtopics']);
+        List<Map<String, dynamic>>.from(userSnapshot.data()!['subtopics']);
 
     // Separate the quiz entry (if exists)
     Map<String, dynamic>? quizEntry;
@@ -173,7 +181,7 @@ class LearningPathGenerator {
     }
 
     // Update Firestore with the modified subtopics list
-    await docRef.set({'subtopics': updatedSubtopics}, SetOptions(merge: true));
+    await userRef.set({'subtopics': updatedSubtopics}, SetOptions(merge: true));
   }
 
   List<Map<String, dynamic>> _parseSubtopics(String responseText) {

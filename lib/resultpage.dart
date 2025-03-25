@@ -219,7 +219,7 @@ class ResultPage extends StatelessWidget {
         'initial_qstns': total,
         'topic_scores':
             orderedTopicScores, // Now stored as a list to preserve order
-        'createdAt': FieldValue.serverTimestamp(),
+        // 'createdAt': FieldValue.serverTimestamp(),
         'streak': 0,
         'totalPoints': 0,
       }, SetOptions(merge: true));

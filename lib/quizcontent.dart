@@ -309,9 +309,16 @@ class _ChapterQuizState extends State<ChapterQuiz> {
   Future<void> _updateFirestore(bool passed) async {
     final firestore = FirebaseFirestore.instance;
     final userRef = firestore.collection('users').doc(widget.userId);
+    final quizRef = userRef.collection('chapterQuiz').doc(widget.topic);
     Map<String, dynamic> subtopicScores = {};
     List<String> weakSubtopics = [];
 
+    // Fetch current quiz status (to check if it's a first attempt)
+    final quizSnapshot = await quizRef.get();
+    bool isFirstAttempt =
+        !quizSnapshot.exists || quizSnapshot.data()?['status'] == 'pending';
+
+    // Calculate subtopic scores
     for (var question in _questions) {
       String subtopic = question['subtopic'];
       bool isCorrect = (question['user_answer'] == question['correct_answer']);
@@ -325,6 +332,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       }
     }
 
+    // Compute final subtopic scores and identify weak subtopics
     Map<String, dynamic> finalSubtopicScores = {};
     subtopicScores.forEach((subtopic, scores) {
       double subtopicScorePercentage = (scores['total'] > 0)
@@ -337,38 +345,49 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     });
 
     try {
-      await userRef.collection('chapterQuiz').doc(widget.topic).set({
+      // Update quiz record
+      await quizRef.set({
         'topic': widget.topic,
         'score': _score,
         'totalQuestions': _questions.length,
         'totalTimeTakenMs': _stopwatch.elapsedMilliseconds,
         'modificationTime': DateTime.now().toIso8601String(),
         'status': 'completed',
+        'attempts': FieldValue.increment(1),
         'subtopicScores': finalSubtopicScores,
       }, SetOptions(merge: true));
+
+      if (!passed) {
+        // User failed, update learning path
+        await userRef.collection('learningPath').doc(widget.topic).update({
+          'completed': false,
+          'weakSubtopics': weakSubtopics.toSet().toList(),
+        });
+
+        final generator = LearningPathGenerator();
+        await generator.generateOrModifyLearningPath(
+          topic: widget.topic,
+          weakSubtopics: weakSubtopics,
+        );
+      } else {
+        // User passed, update leaderboard
+        await updateLeaderboard(widget.userId, widget.topic, _score);
+
+        // Update learning path
+        await userRef.collection('learningPath').doc(widget.topic).update({
+          'completed': true,
+          'weakSubtopics': [],
+        });
+
+        // **If first attempt and passed, add score to total points**
+        if (isFirstAttempt) {
+          await userRef.update({
+            'totalPoints': FieldValue.increment(_score),
+          });
+        }
+      }
     } catch (e) {
       print("Error updating Firestore: $e");
-    }
-
-    if (!passed) {
-      await userRef.collection('learningPath').doc(widget.topic).update({
-        'completed': false,
-        'failcount': FieldValue.increment(1),
-        'weakSubtopics': weakSubtopics.toSet().toList(),
-      });
-
-      final generator = LearningPathGenerator();
-      await generator.generateOrModifyLearningPath(
-        topic: widget.topic,
-        weakSubtopics: weakSubtopics,
-      );
-    } else {
-      await updateLeaderboard(widget.userId, widget.topic, _score);
-      await userRef.collection('learningPath').doc(widget.topic).update({
-        'completed': true,
-        'failcount': 0,
-        'weakSubtopics': [],
-      });
     }
   }
 

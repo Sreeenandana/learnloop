@@ -159,13 +159,6 @@ class LearningPathDisplay extends StatelessWidget {
     final userRef = firestore.collection('users').doc(userId);
     final topicRef = userRef.collection('learningPath').doc(topic);
 
-    int index = subtopics.indexWhere((s) => s['name'] == subtopic);
-    if (index != -1) {
-      subtopics[index]['status'] = 'completed';
-      await topicRef.update({'subtopics': subtopics});
-      print("✅ Firestore updated for subtopic completion.");
-    }
-
     Future<bool> _updateDailyStreak(DocumentReference userRef) async {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day); // Store only date
@@ -217,6 +210,14 @@ class LearningPathDisplay extends StatelessWidget {
       }
 
       return streakUpdated;
+    }
+
+    int index = subtopics.indexWhere((s) => s['name'] == subtopic);
+    if (index != -1) {
+      subtopics[index]['status'] = 'completed';
+      _updateDailyStreak(userRef);
+      await topicRef.update({'subtopics': subtopics});
+      print("✅ Firestore updated for subtopic completion.");
     }
 
     // **Check and Award First Subtopic Badge**

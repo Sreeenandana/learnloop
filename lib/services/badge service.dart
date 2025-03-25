@@ -63,7 +63,7 @@ class BadgeService {
     final badgeDoc = await userBadgeRef.doc(badgeName).get();
     if (!badgeDoc.exists) {
       await userBadgeRef.doc(badgeName).set({
-        "earnedAt": FieldValue.serverTimestamp(),
+        "timestamp": FieldValue.serverTimestamp(),
         "criteria": criteria,
       });
 
@@ -84,7 +84,7 @@ class BadgeService {
 
     await userBadgeRef.doc(badgeName).set({
       "level": nextLevel,
-      "earnedAt": FieldValue.serverTimestamp(),
+      "timestamp": FieldValue.serverTimestamp(),
       "criteria": "$criteriaPrefix $nextLevel",
     }, SetOptions(merge: true));
 
@@ -112,7 +112,7 @@ class BadgeService {
         if (newLevel > currentLevel) {
           await userBadgeRef.doc("Streak Ninja").set({
             "level": newLevel,
-            "earnedAt": FieldValue.serverTimestamp(),
+            "timestamp": FieldValue.serverTimestamp(),
             "criteria":
                 "Maintained a learning streak of $streakDays days - Level $newLevel",
           }, SetOptions(merge: true));
