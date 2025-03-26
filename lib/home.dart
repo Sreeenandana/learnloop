@@ -9,6 +9,7 @@ import 'package:learnloop/weekly_leaderboard.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'dart:async';
+import 'content.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -18,7 +19,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String username = "User";
   final User? user = FirebaseAuth.instance.currentUser;
-  Map<DateTime, double> progressData = {};
+  double progressData = 0.0;
   DateTime _focusedDay = DateTime.now();
   CalendarFormat _calendarFormat = CalendarFormat.week;
   int _totalSubtopics = 1;
@@ -36,7 +37,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _fetchProgressData();
     _fetchSubtopicProgress();
     _fetchCurrentTopic();
-    _fetchCurrentSubtopic();
+    //  _fetchCurrentSubtopic();
     _startTrackingTime();
   }
 
@@ -62,32 +63,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _fetchProgressData() async {
     if (user == null) return;
-    final learningPathRef = FirebaseFirestore.instance
+
+    // Initialize a variable to track total time spent
+    double totalTimeSpent = 0.0;
+
+    // Retrieve the daily progress data from Firebase
+    final progressRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user!.uid)
-        .collection('learningPath');
+        .collection('dailyProgress');
 
-    QuerySnapshot learningPathSnapshot = await learningPathRef.get();
-    Map<DateTime, double> dailyMinutes = {};
+    QuerySnapshot progressSnapshot = await progressRef.get();
 
-    for (var doc in learningPathSnapshot.docs) {
-      List<dynamic> subtopics = doc['subtopics'] ?? [];
-      for (var sub in subtopics) {
-        if (sub['status'] == 'completed' && sub.containsKey('completedAt')) {
-          Timestamp? timestamp = sub['completedAt'];
-          double timeSpent = (sub['timeSpent'] ?? 0).toDouble();
-
-          if (timestamp != null) {
-            DateTime date = timestamp.toDate();
-            DateTime dayKey = DateTime(date.year, date.month, date.day);
-            dailyMinutes[dayKey] = (dailyMinutes[dayKey] ?? 0) + timeSpent;
-          }
-        }
-      }
+    // Iterate through the documents (daily progress records)
+    for (var doc in progressSnapshot.docs) {
+      double timeSpent =
+          (doc['timeSpent'] ?? 0).toDouble(); // Get time spent for the day
+      totalTimeSpent += timeSpent; // Accumulate the time spent
     }
 
+    // After collecting the total time, you can use it for further display or processing
+    print('Total time spent on the app: $totalTimeSpent minutes');
+
     setState(() {
-      progressData = dailyMinutes;
+      progressData = totalTimeSpent; // Update state with the total time spent
     });
   }
 
@@ -117,26 +116,43 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _fetchCurrentTopic() async {
     if (user == null) return;
+
     final learningPathRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user!.uid)
         .collection('learningPath');
 
     QuerySnapshot learningPathSnapshot = await learningPathRef.get();
-    String topic = "All topics completed!";
+    String topic =
+        "All topics completed!"; // Default message if all topics are completed
+
     for (var doc in learningPathSnapshot.docs) {
-      List<dynamic> subtopics = doc['subtopics'] ?? [];
-      if (subtopics.any((sub) => sub['status'] != 'completed')) {
-        topic = doc.id;
+      String topicName = doc.id;
+      print(topicName);
+      if (!doc['completed']) {
+        topic =
+            topicName; // Set the topic name where there are incomplete subtopics
         break;
       }
+      // / Default to document ID as topic name
+      //List<dynamic> subtopics = doc['subtopics'] ?? [];
+
+      // Check if any subtopic is not completed
+      // bool anyIncompleteSubtopic =
+      //   subtopics.any((sub) => sub['status'] != 'completed');
+
+      // if (anyIncompleteSubtopic) {
+      // topic =
+      //   topicName; // Set the topic name where there are incomplete subtopics
+      //break;
     }
+
     setState(() {
-      currentTopic = topic;
+      currentTopic = topic; // Update the state with the current topic
     });
   }
 
-  Future<void> _fetchCurrentSubtopic() async {
+  /* Future<void> _fetchCurrentSubtopic() async {
     if (user == null) return;
     final learningPathRef = FirebaseFirestore.instance
         .collection('users')
@@ -157,7 +173,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       currentSubtopic = subtopic;
     });
-  }
+  }*/
 
   void _startTrackingTime() {
     _sessionStartTime = DateTime.now();
@@ -189,27 +205,29 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     double progress = _completedSubtopics / _totalSubtopics;
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        actions: [
-          IconButton(
-            icon: Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => SettingsPage()),
-              );
-            },
-          ),
-        ],
-        backgroundColor:
-            Color.fromARGB(255, 183, 77, 183), // Customize the AppBar color
-      ),
+      appBar: _selectedIndex == 0
+          ? AppBar(
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.settings),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => SettingsPage()),
+                    );
+                  },
+                ),
+              ],
+              backgroundColor: Color.fromARGB(
+                  255, 183, 77, 183), // Customize the AppBar color
+            )
+          : null, // No AppBar for other pages
       body: IndexedStack(
         index: _selectedIndex,
         children: [
           // HomePage content: You can display the username and progress details
           Padding(
-            padding: const EdgeInsets.all(5.0),
+            padding: const EdgeInsets.all(8.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -222,12 +240,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     color: Color.fromARGB(255, 145, 21, 145),
                   ),
                 ),
-                SizedBox(height: 5),
+                SizedBox(height: 25),
                 // Progress Indicator
                 Center(
                   child: CircularPercentIndicator(
                     radius: 50.0,
-                    lineWidth: 5.0,
+                    lineWidth: 7.0,
                     percent: progress,
                     center: Text(
                       "${(progress * 100).toStringAsFixed(1)}%",
@@ -241,26 +259,66 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     backgroundColor: Colors.grey,
                   ),
                 ),
-                SizedBox(height: 20),
-                // Topic and Subtoic details
-                Text(
-                  "Current Topic: $currentTopic",
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+
+                SizedBox(height: 40),
+                Center(
+                  child: GestureDetector(
+                    onTap: () {
+                      // Navigate to the subtopic content page
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => LearningPathDisplay(),
+                        ),
+                      );
+                    },
+                    child: Column(
+                      children: [
+                        // Continue Learning text outside the box
+                        Text(
+                          "Continue Learning",
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.black54,
+                          ),
+                        ),
+                        SizedBox(
+                            height: 10), // Space between the text and the box
+
+                        // Box containing the topic name
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                              vertical: 12,
+                              horizontal: 16), // Padding for the box
+                          decoration: BoxDecoration(
+                            color: Colors.deepPurpleAccent, // Box color
+                            borderRadius:
+                                BorderRadius.circular(8), // Rounded corners
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.grey.shade300, // Shadow color
+                                blurRadius: 6, // Blur effect for the shadow
+                                offset: Offset(0, 4), // Shadow position
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            "$currentTopic", // Topic name inside the box
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.white, // Text color
+                              fontWeight:
+                                  FontWeight.bold, // Text weight for emphasis
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                SizedBox(height: 10),
-                Text(
-                  "Current Subtopic: $currentSubtopic",
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: Colors.black54,
-                  ),
-                ),
-                SizedBox(height: 30),
-                // Calendar widget
+
+                SizedBox(height: 50),
+// Calendar widget
                 Container(
                   margin: EdgeInsets.all(10),
                   padding: EdgeInsets.all(10),
@@ -285,10 +343,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
                 SizedBox(height: 20),
                 // Other content like Learning Path, Leaderboard, etc.
-                Expanded(child: LearningPathDisplay()),
-                Expanded(child: WeeklyLeaderboard()),
-                Expanded(child: BadgesPage()),
-                Expanded(child: ProfilePage()),
+                //Expanded(child: LearningPathDisplay()),
+                //Expanded(child: WeeklyLeaderboard()),
+                //Expanded(child: BadgesPage()),
+                //Expanded(child: ProfilePage()),
               ],
             ),
           ),
@@ -319,8 +377,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ),
     );
   }
-}
-
 
 /*import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -603,3 +659,4 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 } 
 */
+}
