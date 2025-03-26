@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -507,11 +508,125 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 class HelpPage extends StatelessWidget {
   const HelpPage({super.key});
 
+  void _sendEmail() async {
+    final Uri emailUri = Uri(
+      scheme: 'mailto',
+      path: 'support@yourapp.com',
+      queryParameters: {'subject': 'Help & Support Inquiry'},
+    );
+    if (await canLaunchUrl(emailUri)) {
+      await launchUrl(emailUri);
+    }
+  }
+
+  // Function to open a link
+  void _launchURL(String url) async {
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Help & Support')),
-      body: const Center(child: Text('Help & Support Page')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // FAQ Section
+            _buildSectionTitle("Frequently Asked Questions"),
+            ExpansionTile(
+              title: const Text("How does the app work?"),
+              children: [Padding(padding: const EdgeInsets.all(10.0), child: Text("The app provides AI-powered tutoring based on your learning path."))],
+            ),
+            ExpansionTile(
+              title: const Text("How do I reset my password?"),
+              children: [Padding(padding: const EdgeInsets.all(10.0), child: Text("Go to Settings > Account > Reset Password."))],
+            ),
+            ExpansionTile(
+              title: const Text("How can I track my progress?"),
+              children: [Padding(padding: const EdgeInsets.all(10.0), child: Text("You can track progress under the 'Path' section."))],
+            ),
+
+            const SizedBox(height: 20),
+
+            // Contact Support Section
+            _buildSectionTitle("Contact Support"),
+            ListTile(
+              leading: const Icon(Icons.email, color: Colors.blue),
+              title: const Text("Email Us"),
+              subtitle: const Text("learnloop3@gmail.com"),
+              onTap: _sendEmail,
+            ),
+            ListTile(
+              leading: const Icon(Icons.chat, color: Colors.green),
+              title: const Text("Live Chat (Coming Soon)"),
+              subtitle: const Text("Chat with our support team"),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Tutorials Section
+            _buildSectionTitle("Tutorials & Guides"),
+            ListTile(
+              leading: const Icon(Icons.video_library, color: Colors.red),
+              title: const Text("Watch Video Tutorial"),
+              subtitle: const Text("Learn how to use the app"),
+              onTap: () => _launchURL("https://www.youtube.com"),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Troubleshooting Section
+            _buildSectionTitle("Troubleshooting & Common Issues"),
+            ListTile(
+              leading: const Icon(Icons.error, color: Colors.orange),
+              title: const Text("Login Issues"),
+              subtitle: const Text("Reset your password if you have trouble logging in."),
+            ),
+            ListTile(
+              leading: const Icon(Icons.bug_report, color: Colors.purple),
+              title: const Text("Quiz Not Loading"),
+              subtitle: const Text("Check your internet connection and try again."),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Report a Bug
+            _buildSectionTitle("Report a Bug"),
+            ListTile(
+              leading: const Icon(Icons.report, color: Colors.red),
+              title: const Text("Submit a Bug Report"),
+              subtitle: const Text("Help us improve by reporting issues."),
+              onTap: () => _launchURL("https://forms.google.com"), // Replace with actual form link
+            ),
+
+            const SizedBox(height: 20),
+
+            // Community & Forums
+            _buildSectionTitle("Community & Forums"),
+            ListTile(
+              leading: const Icon(Icons.forum, color: Colors.blue),
+              title: const Text("Join the Community"),
+              subtitle: const Text("Discuss and learn with others"),
+              onTap: () => _launchURL("https://discord.com"), // Replace with actual community link
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Function to create a section title
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Text(
+        title,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
     );
   }
 }
@@ -524,7 +639,61 @@ class AboutPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('About')),
-      body: const Center(child: Text('About Page')),
+      body: Padding(
+        padding: EdgeInsets.all(16.0),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "About This App",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              Text(
+                "Welcome to Learnloop, AI-powered personal tutor designed to provide an adaptive and personalized learning experience. Our goal is to help you master subjects at your own pace with dynamically generated content, quizzes, and feedback tailored to your performance.",
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 20),
+              Text(
+                "Key Features:",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              _buildFeatureItem("✅ AI-Generated Content & Quizzes – Get dynamically generated lessons and questions based on your progress."),
+              _buildFeatureItem("✅ Personalized Learning Path – Adaptive topics and subtopics that evolve based on your quiz results."),
+              _buildFeatureItem("✅ Progress Tracking – Monitor your improvement with topic-wise scores and badges."),
+              _buildFeatureItem("✅ Interactive Quizzes – Reinforce learning with quizzes that unlock the next topics."),
+              _buildFeatureItem("✅ Smart Recommendations – Weak areas are reinforced with simpler, AI-curated content."),
+              _buildFeatureItem("✅ Leaderboard & Achievements – Compete with peers and earn badges as you progress."),
+              SizedBox(height: 20),
+              Text(
+                "Our Mission",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              Text(
+                "We believe in making education accessible, engaging, and tailored to each learner's needs. Using AI, we aim to revolutionize the way students learn by ensuring they receive the right content at the right time.",
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 20),
+              Text(
+                "Need Help?",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              Text("📧 learnloop3.com", style: TextStyle(fontSize: 16)),
+              Text("🌐 [Your Website URL]", style: TextStyle(fontSize: 16)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+    Widget _buildFeatureItem(String text) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4.0),
+      child: Text(text, style: TextStyle(fontSize: 16)),
     );
   }
 }
