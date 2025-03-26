@@ -40,7 +40,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       );
       final response = await model.generateContent([
         Content.text(
-            "Explain why the correct answer for '${questionData['question']}' is '${questionData['correct_answer']} in 5 to 8 sentences. "
+            "Explain why the correct answer for '${questionData['question']}' is '${questionData['correct_answer']} in 5 to 8 sentences. Make it simple and easy to understand."
             "Do not provide any other formatting, just give plain text.")
       ]);
 
@@ -86,12 +86,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
             const SizedBox(height: 8),
             Text(
               "Correct Answer: ${question['correct_answer']}",
-              style: const TextStyle(color: Colors.green, fontSize: 14),
+              style: const TextStyle(
+                  color: Color.fromARGB(255, 17, 40, 18), fontSize: 14),
             ),
             const SizedBox(height: 8),
             Text(
               "Explanation: ${question['explanation'] ?? 'Fetching explanation...'}",
-              style: const TextStyle(color: Colors.blue, fontSize: 14),
+              style: const TextStyle(
+                  color: Color.fromARGB(255, 35, 43, 50), fontSize: 14),
             ),
             const Spacer(),
             ElevatedButton(

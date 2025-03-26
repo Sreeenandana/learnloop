@@ -172,7 +172,7 @@ class BadgeService {
               .doc('First Subtopic')
               .set({
             'timestamp': Timestamp.now(),
-            "criteria": "Completed first subtopic: $firstSubtopicName"
+            "criteria": "Completed first subtopic"
           });
 
           earnedBadges.add("First Subtopic Completed");

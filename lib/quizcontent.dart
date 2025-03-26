@@ -243,6 +243,19 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         },
         child: Text('OK'),
       ));
+      actions.add(ElevatedButton(
+        onPressed: () {
+          Navigator.pop(context);
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  ReviewScreen(incorrectQuestions: _incorrectQuestions),
+            ),
+          );
+        },
+        child: Text('Review'),
+      ));
     } else {
       message = 'Congratulations! You passed!\n'
           'Your Score: $_score / ${_questions.length} '
