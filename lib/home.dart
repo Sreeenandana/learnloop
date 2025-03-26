@@ -19,7 +19,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String username = "User";
   final User? user = FirebaseAuth.instance.currentUser;
-  double progressData = 0.0;
+  Map<DateTime, double> progressData = {}; // Initialize as a Map
   DateTime _focusedDay = DateTime.now();
   CalendarFormat _calendarFormat = CalendarFormat.week;
   int _totalSubtopics = 1;
@@ -37,7 +37,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _fetchProgressData();
     _fetchSubtopicProgress();
     _fetchCurrentTopic();
-    //  _fetchCurrentSubtopic();
+    // _fetchCurrentSubtopic();
     _startTrackingTime();
   }
 
@@ -64,10 +64,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _fetchProgressData() async {
     if (user == null) return;
 
-    // Initialize a variable to track total time spent
-    double totalTimeSpent = 0.0;
-
-    // Retrieve the daily progress data from Firebase
     final progressRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user!.uid)
@@ -75,18 +71,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     QuerySnapshot progressSnapshot = await progressRef.get();
 
-    // Iterate through the documents (daily progress records)
+    Map<DateTime, double> timeSpentData = {};
+
     for (var doc in progressSnapshot.docs) {
-      double timeSpent =
-          (doc['timeSpent'] ?? 0).toDouble(); // Get time spent for the day
-      totalTimeSpent += timeSpent; // Accumulate the time spent
+      Timestamp timestamp = doc['date'];
+      DateTime date = DateTime(timestamp.toDate().year,
+          timestamp.toDate().month, timestamp.toDate().day);
+      double timeSpent = (doc['timeSpent'] ?? 0).toDouble();
+
+      timeSpentData[date] = timeSpent;
     }
 
-    // After collecting the total time, you can use it for further display or processing
-    print('Total time spent on the app: $totalTimeSpent minutes');
-
     setState(() {
-      progressData = totalTimeSpent; // Update state with the total time spent
+      progressData = timeSpentData;
     });
   }
 
@@ -115,6 +112,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _fetchCurrentTopic() async {
+    print("Fetching current topic...");
     if (user == null) return;
 
     final learningPathRef = FirebaseFirestore.instance
@@ -123,33 +121,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         .collection('learningPath');
 
     QuerySnapshot learningPathSnapshot = await learningPathRef.get();
-    String topic =
-        "All topics completed!"; // Default message if all topics are completed
+
+    String newTopic = "All topics completed!"; // Default message
 
     for (var doc in learningPathSnapshot.docs) {
       String topicName = doc.id;
-      print(topicName);
-      if (!doc['completed']) {
-        topic =
-            topicName; // Set the topic name where there are incomplete subtopics
-        break;
+      Map<String, dynamic> data =
+          doc.data() as Map<String, dynamic>; // Cast to Map
+
+      bool isCompleted =
+          data.containsKey('completed') ? (data['completed'] as bool) : false;
+
+      print("Topic: $topicName, Completed: $isCompleted");
+
+      if (!isCompleted) {
+        newTopic = topicName; // Set the first topic that is not completed
+        break; // Stop looking for topics
       }
-      // / Default to document ID as topic name
-      //List<dynamic> subtopics = doc['subtopics'] ?? [];
-
-      // Check if any subtopic is not completed
-      // bool anyIncompleteSubtopic =
-      //   subtopics.any((sub) => sub['status'] != 'completed');
-
-      // if (anyIncompleteSubtopic) {
-      // topic =
-      //   topicName; // Set the topic name where there are incomplete subtopics
-      //break;
     }
 
     setState(() {
-      currentTopic = topic; // Update the state with the current topic
+      currentTopic = newTopic; // Update UI
     });
+
+    print("Current Topic: $currentTopic");
   }
 
   /* Future<void> _fetchCurrentSubtopic() async {
@@ -219,7 +214,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               ],
               backgroundColor: Color.fromARGB(
-                  255, 183, 77, 183), // Customize the AppBar color
+                  255, 230, 98, 230), // Customize the AppBar color
             )
           : null, // No AppBar for other pages
       body: IndexedStack(
@@ -237,7 +232,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   style: TextStyle(
                     fontSize: 32, // Larger font size for the welcome message
                     fontWeight: FontWeight.bold,
-                    color: Color.fromARGB(255, 145, 21, 145),
+                    color: Color.fromARGB(255, 230, 98, 230),
                   ),
                 ),
                 SizedBox(height: 25),
@@ -252,7 +247,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.deepPurple,
+                        color: Color.fromARGB(255, 230, 98, 230),
                       ),
                     ),
                     progressColor: Colors.green,
@@ -291,7 +286,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               vertical: 12,
                               horizontal: 16), // Padding for the box
                           decoration: BoxDecoration(
-                            color: Colors.deepPurpleAccent, // Box color
+                            color:
+                                Color.fromARGB(255, 230, 98, 230), // Box color
                             borderRadius:
                                 BorderRadius.circular(8), // Rounded corners
                             boxShadow: [
@@ -317,30 +313,38 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ),
                 ),
 
-                SizedBox(height: 50),
-// Calendar widget
-                Container(
-                  margin: EdgeInsets.all(10),
-                  padding: EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(color: Colors.grey.shade300, blurRadius: 6),
-                    ],
-                  ),
-                  child: TableCalendar(
-                    firstDay: DateTime.utc(2025, 1, 1),
-                    lastDay: DateTime.utc(2025, 12, 31),
-                    focusedDay: _focusedDay,
-                    calendarFormat: _calendarFormat,
-                    onDaySelected: (selectedDay, focusedDay) {
-                      setState(() {
-                        _focusedDay = focusedDay;
-                      });
+                TableCalendar(
+                  firstDay: DateTime.utc(2025, 1, 1),
+                  lastDay: DateTime.utc(2025, 12, 31),
+                  focusedDay: _focusedDay,
+                  calendarFormat: _calendarFormat,
+                  calendarBuilders: CalendarBuilders(
+                    defaultBuilder: (context, day, focusedDay) {
+                      DateTime normalizedDay =
+                          DateTime(day.year, day.month, day.day);
+                      double timeSpent = progressData[normalizedDay] ?? 0.0;
+
+                      double intensity = (timeSpent / 100.0)
+                          .clamp(0.0, 1.0); // Normalize & clamp
+
+                      return Container(
+                        margin: EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Color.lerp(Colors.white,
+                              Color.fromARGB(255, 230, 98, 230), intensity),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(child: Text('${day.day}')),
+                      );
                     },
                   ),
+                  onDaySelected: (selectedDay, focusedDay) {
+                    setState(() {
+                      _focusedDay = focusedDay;
+                    });
+                  },
                 ),
+
                 SizedBox(height: 20),
                 // Other content like Learning Path, Leaderboard, etc.
                 //Expanded(child: LearningPathDisplay()),
@@ -370,7 +374,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           BottomNavigationBarItem(icon: Icon(Icons.badge), label: ' '),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: ' '),
         ],
-        selectedItemColor: Color.fromARGB(255, 183, 77, 183),
+        selectedItemColor: Color.fromARGB(255, 230, 98, 230),
         unselectedItemColor: Colors.grey,
         backgroundColor: Colors.white,
         type: BottomNavigationBarType.fixed,
