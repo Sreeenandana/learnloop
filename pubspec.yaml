@@ -30,7 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  table_calendar: ^3.0.9
+  flutter_heatmap_calendar: ^1.0.1
   flutter_highlight: ^0.7.0
   shared_preferences: ^2.1.0
   google_sign_in: ^5.0.7

@@ -13,7 +13,24 @@ class BadgesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("🏆 Your Badges")),
+      appBar: AppBar(
+        backgroundColor: Color.fromARGB(255, 230, 98, 230),
+        toolbarHeight: 80.0,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Adjust this value to move text more to the right
+            Text(
+              "YOUR BADGES",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
       body: FutureBuilder<String?>(
         future: _getCurrentUserId(),
         builder: (context, userSnapshot) {

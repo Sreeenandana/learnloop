@@ -19,7 +19,23 @@ class LearningPathDisplay extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Learning Path")),
+      appBar: AppBar(
+        backgroundColor: Color.fromARGB(255, 230, 98, 230),
+        toolbarHeight: 80.0,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "LEARNING PATH",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: firestore
             .collection('users')
