@@ -8,6 +8,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'resultpage.dart';
 
 class QuizPage extends StatefulWidget {
+  final String language;
+  QuizPage({required this.language});
+
   @override
   _QuizPageState createState() => _QuizPageState();
 }
@@ -25,11 +28,13 @@ class _QuizPageState extends State<QuizPage> {
   Map<String, int> _topicScores = LinkedHashMap();
   Map<int, String> _userAnswers = {};
   int _score = 0;
+  String language = "java";
 
   @override
   void initState() {
     super.initState();
-    _fetchTopics(); // Fetch topics when the page loads
+    language = widget.language;
+    _fetchTopics(language);
   }
 
   @override
@@ -48,22 +53,68 @@ class _QuizPageState extends State<QuizPage> {
     return _buildQuizUI();
   }
 
-  Future<void> _fetchTopics() async {
-    // Static list of 12 ordered topics
+  Future<void> _fetchTopics(language) async {
+    List<String> javatopics = [
+      "1. Introduction to Java",
+      "2. Data Types and Variables",
+      "3. Control Flow and loops",
+      "4. Arrays and Strings",
+      "5. Methods and Functions",
+      "6. Object-Oriented Programming",
+      "7. Inheritance and Polymorphism",
+      "8. Exception Handling",
+      "9. File Handling in Java"
+    ];
+
+    List<String> pythontopics = [
+      "1. Introduction to Python",
+      "2. Variables, Data Types & Operators",
+      "3. Control Flow (Conditions & Loops)",
+      "4. Data Structures- Lists, Tuples, Sets, Dictionaries",
+      "5. Functions & Modules",
+      "6. String Handling & File Input Output",
+      "7. Object-Oriented Programming",
+      "8. Exception Handling & Debugging",
+      "9. Advanced Topics & Libraries"
+    ];
+
+    List<String> cpptopics = [
+      "1. Introduction to C++"
+          "2. Data Types, Variables & Operators"
+          "3. Control Flow (Conditions & Loops)"
+          "4. Arrays, Strings & Pointers"
+          "5. Functions & Recursion"
+          "6. Structures, Unions & Enums"
+          "7. Object-Oriented Programming in CPP"
+          "8. File Handling"
+          "9. Memory Management & Advanced Concepts"
+    ];
+
+    List<String> ctopics = [
+      "1. Introduction to C",
+      "2. Data Types, Variables, and Operators",
+      "3. Control Flow (if, switch, loops)",
+      "4. Arrays and Strings",
+      "5. Functions and Recursion",
+      "6. Pointers",
+      "7. Structures and Unions",
+      "8. File Handling in C",
+      "9. Dynamic Memory Allocation"
+    ];
+
+    // Add more languages here if needed
+
     setState(() {
-      _topics = [
-        "1. Introduction to Java",
-        "2. Data Types and Variables",
-        "3. Control Flow and loops",
-        "4. Arrays and Strings ",
-        "5. Methods and Functions",
-        "6. Object-Oriented Programming (OOP)",
-        "7. Inheritance and Polymorphism",
-        "8. Exception Handling",
-        "9. File Handling in Java"
-      ];
-      _isLoadingTopics = false; // Stop loading once topics are received
-      print("Topics received: $_topics");
+      if (language.toLowerCase() == 'cpp') {
+        _topics = cpptopics;
+      } else if (language.toLowerCase() == 'python') {
+        _topics = pythontopics;
+      } else if (language.toLowerCase() == 'c') {
+        _topics = ctopics;
+      } else {
+        _topics = javatopics;
+      }
+      _isLoadingTopics = false;
     });
   }
 
@@ -182,7 +233,7 @@ class _QuizPageState extends State<QuizPage> {
         print("Fetching questions for topic: $topic");
         final response = await model.generateContent([
           Content.text(
-              "Generate $questionsPerTopic beginner-level java related multiple-choice questions (MCQs) with exactly 4 options and no more. "
+              "Generate $questionsPerTopic beginner-level $language related multiple-choice questions (MCQs) with exactly 4 options and no more. "
               "from the topic '$topic'. do not use commas anywhere else other than to separate options. ignore the number before the topic name. Format each question as 'qstn:', options as 'opt:'(separated by :), 'ans:' for the correct answer, and 'top:' for the topic which should be $topic including the number at the beginning."
               " do not repeat questions. do not put unnecessary special characters or explanations or brackets.")
         ]);
@@ -394,6 +445,7 @@ class _QuizPageState extends State<QuizPage> {
       context,
       MaterialPageRoute(
         builder: (context) => ResultPage(
+          language: language,
           score: _score,
           total: _questions.length,
           topicScores: _topicScores,

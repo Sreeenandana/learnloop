@@ -124,22 +124,26 @@ class BadgeService {
   }
 
   /// **Check and Award First Subtopic Badge**
-  Future<void> checkAndAwardSubtopicBadges(String subtopic) async {
+  Future<void> checkAndAwardSubtopicBadges(
+      String subtopic, String language) async {
     List<String> earnedBadges =
-        await _checkAndAwardFirstSubtopicBadge(subtopic);
+        await _checkAndAwardFirstSubtopicBadge(subtopic, language);
     if (earnedBadges.isNotEmpty) {
       _showBadgeDialog(earnedBadges);
     }
   }
 
   /// **Helper Function to Check and Award First Subtopic Badge**
-  Future<List<String>> _checkAndAwardFirstSubtopicBadge(String subtopic) async {
+  Future<List<String>> _checkAndAwardFirstSubtopicBadge(
+      String subtopic, String language) async {
     List<String> earnedBadges = [];
 
     try {
       QuerySnapshot topicSnapshot = await _firestore
           .collection('users')
           .doc(userId)
+          .collection('languages')
+          .doc(language)
           .collection('learningPath')
           .where(FieldPath.documentId, isGreaterThanOrEqualTo: '1.')
           .where(FieldPath.documentId, isLessThan: '2')
@@ -161,7 +165,7 @@ class BadgeService {
             .collection('users')
             .doc(userId)
             .collection('badges')
-            .doc('First Subtopic')
+            .doc('First Subtopic - $language')
             .get();
 
         if (!badgeDoc.exists) {
@@ -169,10 +173,10 @@ class BadgeService {
               .collection('users')
               .doc(userId)
               .collection('badges')
-              .doc('First Subtopic')
+              .doc('First Subtopic - $language')
               .set({
             'timestamp': Timestamp.now(),
-            "criteria": "Completed first subtopic"
+            "criteria": "Completed first subtopic of $language"
           });
 
           earnedBadges.add("First Subtopic Completed");

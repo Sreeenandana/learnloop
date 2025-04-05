@@ -1,9 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:collection';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'pathdisplay.dart';
+
 import 'pathgen.dart';
 import 'home.dart';
 
@@ -15,6 +12,8 @@ class ResultPage extends StatelessWidget {
   final List<Map<String, dynamic>> questions;
   final Map<int, String> userAnswers;
 
+  final String language;
+
   const ResultPage({
     Key? key,
     required this.score,
@@ -23,6 +22,7 @@ class ResultPage extends StatelessWidget {
     required this.userId,
     required this.questions,
     required this.userAnswers,
+    required this.language, // Add this line
   }) : super(key: key);
 
   @override
@@ -125,8 +125,9 @@ class ResultPage extends StatelessWidget {
                     builder: (context) => FullScreenLoadingDialog(),
                   );
 
-                  await generator
-                      .generateOrModifyLearningPath(); // Ensure path is generated
+                  await generator.generateOrModifyLearningPath(
+                      context: context,
+                      language: language); // Ensure path is generated
 
                   Navigator.pop(context); // Close loading dialog
                   //print("going to path page");
@@ -215,11 +216,13 @@ class ResultPage extends StatelessWidget {
       }).toList();
 
       await userDocRef.set({
-        'initial_marks': score,
-        'initial_qstns': total,
-        'topic_scores':
-            orderedTopicScores, // Now stored as a list to preserve order
-        // 'createdAt': FieldValue.serverTimestamp(),
+        'initial_assessment': {
+          language: {
+            'initial_marks': score,
+            'initial_qstns': total,
+            'topic_scores': orderedTopicScores,
+          }
+        }, // Can be used for current selection
         'streak': 0,
         'totalPoints': 0,
       }, SetOptions(merge: true));

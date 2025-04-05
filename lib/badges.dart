@@ -64,7 +64,7 @@ class BadgesPage extends StatelessWidget {
               Map<String, DocumentSnapshot> latestBadges = {};
 
               for (var doc in badgeSnapshot.data!.docs) {
-                var badge = doc.data() as Map<String, dynamic>;
+                //var badge = doc.data() as Map<String, dynamic>;
                 String badgeName = doc.id;
                 String baseName =
                     badgeName.replaceAll(RegExp(r' Level \d+$'), '');

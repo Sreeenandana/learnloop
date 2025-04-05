@@ -31,6 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_heatmap_calendar: ^1.0.1
+  provider: ^6.1.1
   flutter_highlight: ^0.7.0
   shared_preferences: ^2.1.0
   google_sign_in: ^5.0.7

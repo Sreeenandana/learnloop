@@ -4,12 +4,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:learnloop/content.dart';
 import 'main.dart';
+import 'initial.dart';
 import 'services/badge service.dart';
 import 'package:learnloop/quizcontent.dart';
 
 class LearningPathDisplay extends StatelessWidget {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
+  final String language; // Add at the top of the class
+
+  LearningPathDisplay({Key? key, required this.language}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +44,8 @@ class LearningPathDisplay extends StatelessWidget {
         stream: firestore
             .collection('users')
             .doc(userId)
+            .collection('languages')
+            .doc(language)
             .collection('learningPath')
             .snapshots(),
         builder: (context, snapshot) {
@@ -47,7 +53,37 @@ class LearningPathDisplay extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("No learning path available"));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text("No learning path available"),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => QuizPage(language: language),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purple,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      "Take Initial Assessment",
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ),
+                ],
+              ),
+            );
           }
 
           final topics = snapshot.data!.docs;
@@ -142,6 +178,7 @@ class LearningPathDisplay extends StatelessWidget {
         builder: (context) => ChapterQuiz(
           userId: userId,
           topic: topic,
+          language: language,
           onQuizFinished: () {
             _markSubtopicCompleted(context, userId, topic, subtopics,
                 subtopic); // Close quiz screen after completion
@@ -160,6 +197,7 @@ class LearningPathDisplay extends StatelessWidget {
         builder: (context) => SubtopicContentPage(
           userId: userId,
           topic: topic,
+          language: language,
           subtopic: subtopic,
           onSubtopicFinished: () => _markSubtopicCompleted(
               context, userId, topic, subtopics, subtopic),
@@ -173,7 +211,11 @@ class LearningPathDisplay extends StatelessWidget {
     print("✅ Marking subtopic as completed: $subtopic");
 
     final userRef = firestore.collection('users').doc(userId);
-    final topicRef = userRef.collection('learningPath').doc(topic);
+    final topicRef = userRef
+        .collection('languages')
+        .doc(language)
+        .collection('learningPath')
+        .doc(topic);
 
     Future<bool> _updateDailyStreak(DocumentReference userRef) async {
       final now = DateTime.now();
@@ -238,6 +280,6 @@ class LearningPathDisplay extends StatelessWidget {
 
     // **Check and Award First Subtopic Badge**
     await BadgeService(userId, navigatorKey)
-        .checkAndAwardSubtopicBadges(subtopic);
+        .checkAndAwardSubtopicBadges(subtopic, language);
   }
 }

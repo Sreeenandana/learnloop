@@ -1,7 +1,3 @@
-//badge firebaseil update aavnn ind but usern kanan pattoola. should change the dialog box.
-//if no wrong answers review button ozhivakkanam. ippo error aan.
-//prompt matti kurach subtopics aakkan nokkam
-
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,19 +8,19 @@ import 'pathgen.dart';
 import 'services/badge service.dart';
 import 'main.dart';
 import 'reviewqstns.dart';
-import 'pathdisplay.dart';
 
 class ChapterQuiz extends StatefulWidget {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final String topic;
   final VoidCallback onQuizFinished;
   final String userId;
-
+  final String language;
   ChapterQuiz({
     super.key,
     required this.topic,
     required this.onQuizFinished,
     required this.userId,
+    required this.language,
   });
 
   @override
@@ -66,8 +62,8 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       );
 
       // Await the prompt since it's a Future<String>
-      final String prompt =
-          await _generatePromptForQuiz(widget.topic, widget.userId);
+      final String prompt = await _generatePromptForQuiz(
+          widget.topic, widget.userId, widget.language);
       final content = [Content.text(prompt)];
 
       final response = await model.generateContent(content);
@@ -95,24 +91,27 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     }
   }
 
-  Future<String> _generatePromptForQuiz(String topic, String userId) async {
-    List<String> subtopics = await _fetchSubtopicsFromFirestore(topic);
+  Future<String> _generatePromptForQuiz(
+      String topic, String userId, String language) async {
+    List<String> subtopics =
+        await _fetchSubtopicsFromFirestore(topic, language);
     String subtopicsString = subtopics.join(', ');
 
-    return "Generate 5 multiple choice questions (MCQs) about Java, on topic $topic. "
+    return "Generate 5 multiple choice questions (MCQs) about $language, on topic $topic. "
         "Focus on the following subtopics: $subtopicsString. "
         "Each question must be structured as follows:"
         "qstn: [Question text]\n"
-        "opt: [Option1]_[Option2]_[Option3]_[Option4]\n"
+        "opt: [Option1]|[Option2]|[Option3]|[Option4]\n"
         "ans: [Correct Option (exact match from opt)]\n"
         "sub: [Subtopic]\n\n"
         "Ensure that:\n"
-        "- Options are underscore-separated.\n"
+        "- Options are pipe | separated. do not change the format. \n"
         "- The correct answer appears exactly as listed in 'opt'.\n"
         "- No additional text is provided.";
   }
 
-  Future<List<String>> _fetchSubtopicsFromFirestore(String topic) async {
+  Future<List<String>> _fetchSubtopicsFromFirestore(
+      String topic, String language) async {
     List<String> subtopics = [];
     String? userId = _auth.currentUser?.uid;
     try {
@@ -120,6 +119,8 @@ class _ChapterQuizState extends State<ChapterQuiz> {
           FirebaseFirestore.instance.collection('users');
       DocumentSnapshot<Map<String, dynamic>> topicDoc = await userCollection
           .doc(userId)
+          .collection("languages")
+          .doc(language)
           .collection('learningPath') // Correctly referencing the collection
           .doc(topic)
           .get();
@@ -154,7 +155,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         }
         currentQuestion['qstn'] = line.substring(5).trim();
       } else if (line.startsWith('opt:')) {
-        var options = line.substring(4).trim().split('_');
+        var options = line.substring(4).trim().split('|');
         options = options.map((opt) => opt.trim()).toList();
         if (options.length != 4) {
           print("⚠️ Warning: Incorrect options format - $options");
@@ -322,7 +323,11 @@ class _ChapterQuizState extends State<ChapterQuiz> {
   Future<void> _updateFirestore(bool passed) async {
     final firestore = FirebaseFirestore.instance;
     final userRef = firestore.collection('users').doc(widget.userId);
-    final quizRef = userRef.collection('chapterQuiz').doc(widget.topic);
+    final quizRef = userRef
+        .collection('languages')
+        .doc(widget.language)
+        .collection('chapterQuiz')
+        .doc(widget.topic);
     Map<String, dynamic> subtopicScores = {};
     List<String> weakSubtopics = [];
 
@@ -358,6 +363,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     });
 
     try {
+      print("updating quiz");
       // Update quiz record
       await quizRef.set({
         'topic': widget.topic,
@@ -372,13 +378,19 @@ class _ChapterQuizState extends State<ChapterQuiz> {
 
       if (!passed) {
         // User failed, update learning path
-        await userRef.collection('learningPath').doc(widget.topic).update({
+        await userRef
+            .collection('languages')
+            .doc(widget.language)
+            .collection('learningPath')
+            .doc(widget.topic)
+            .update({
           'completed': false,
           'weakSubtopics': weakSubtopics.toSet().toList(),
         });
 
         final generator = LearningPathGenerator();
         await generator.generateOrModifyLearningPath(
+          language: widget.language,
           topic: widget.topic,
           weakSubtopics: weakSubtopics,
         );
@@ -387,7 +399,12 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         await updateLeaderboard(widget.userId, widget.topic, _score);
 
         // Update learning path
-        await userRef.collection('learningPath').doc(widget.topic).update({
+        await userRef
+            .collection('languages')
+            .doc(widget.language)
+            .collection('learningPath')
+            .doc(widget.topic)
+            .update({
           'completed': true,
           'weakSubtopics': [],
         });

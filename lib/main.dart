@@ -4,11 +4,13 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:workmanager/workmanager.dart';
+import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'home.dart';
 import 'login.dart';
 import 'splashscreen.dart';
+import 'language_provider.dart';
 
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) {
@@ -17,11 +19,11 @@ void callbackDispatcher() {
   });
 }
 
-// Background message handler
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print("Handling a background message: ${message.messageId}");
+  print("Handling a background message: \${message.messageId}");
 }
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -54,16 +56,10 @@ void main() async {
     isInDebugMode: true,
   );
 
-  // Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
   tz.initializeTimeZones();
-
-  const AndroidInitializationSettings androidInitializationSettings =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-  final InitializationSettings initializationSettings =
-      InitializationSettings(android: androidInitializationSettings);
 
   await flutterLocalNotificationsPlugin.initialize(
     const InitializationSettings(
@@ -71,10 +67,8 @@ void main() async {
     ),
   );
 
-  // Firebase Messaging instance
   FirebaseMessaging messaging = FirebaseMessaging.instance;
 
-  // Request permission for notifications
   NotificationSettings settings = await messaging.requestPermission(
     alert: true,
     badge: true,
@@ -87,16 +81,13 @@ void main() async {
     print("User declined or has not granted permission");
   }
 
-  // Get the device token for push notifications
   String? token = await messaging.getToken();
-  print("FCM Token: $token");
+  print("FCM Token: \$token");
 
-  // Set background message handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // Handle foreground messages
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    print("Received a foreground message: ${message.notification?.title}");
+    print("Received a foreground message: \${message.notification?.title}");
 
     RemoteNotification? notification = message.notification;
     AndroidNotification? android = message.notification?.android;
@@ -119,7 +110,12 @@ void main() async {
     }
   });
 
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => LanguageProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {

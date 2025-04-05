@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:learnloop/main.dart';
 import 'dart:async';
 import 'package:workmanager/workmanager.dart';
 
@@ -11,12 +9,14 @@ class SubtopicContentPage extends StatefulWidget {
   final String subtopic;
   final VoidCallback onSubtopicFinished;
   final String userId;
+  final String language;
 
   SubtopicContentPage({
     super.key,
     required this.topic,
     required this.subtopic,
     required this.onSubtopicFinished,
+    required this.language,
     required this.userId,
   });
 
@@ -58,7 +58,7 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
 
       final response = await model.generateContent([
         Content.text(
-            "Generate some explanation about ${widget.subtopic} in the context of Java programming. "
+            "Generate some explanation about ${widget.subtopic} in the context of ${widget.language} programming language . "
             "Make it interesting and catchy. Imagine you are teaching a 13-year-old. "
             "Also, include examples and very simple questions. "
             "Start the explanation with 'eexplanation:', examples with 'eexamples:', and questions with 'qquestions:'.")

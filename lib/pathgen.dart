@@ -9,19 +9,16 @@ class LearningPathGenerator {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final String _apiKey = 'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44';
-
+  //final String? language ='';
   final List<String> motivationalQuotes = [
-    "Learning never exhausts the mind. – Leonardo da Vinci",
-    "The beautiful thing about learning is that nobody can take it away from you. – B.B. King",
-    "Live as if you were to die tomorrow. Learn as if you were to live forever. – Mahatma Gandhi",
-    "The more I read, the more I acquire, the more certain I am that I know nothing. – Voltaire",
-    "The capacity to learn is a gift; the ability to learn is a skill; the willingness to learn is a choice. – Brian Herbert",
-    "Success is not the key to happiness. Happiness is the key to success. If you love what you are doing, you will be successful. – Albert Schweitzer",
+    "aa",
+    "vv",
   ];
 
   Future<void> generateOrModifyLearningPath(
       {BuildContext? context,
       String? topic,
+      String? language,
       List<String>? weakSubtopics}) async {
     print("in genormod");
     final userId = _auth.currentUser?.uid;
@@ -32,21 +29,23 @@ class LearningPathGenerator {
 
     if (topic != null && weakSubtopics != null && weakSubtopics.isNotEmpty) {
       print("bef mod");
-      await _modifyWeakSubtopics(userId, topic, weakSubtopics);
+      await _modifyWeakSubtopics(userId, topic, weakSubtopics, language);
       return;
     }
 
-    final topicScores = await _fetchTopicScores(userId);
+    final topicScores = await _fetchTopicScores(userId, language);
 
     for (var topic in topicScores.keys) {
-      await _generateAndStoreSubtopics(userId, topic, topicScores[topic]!);
+      await _generateAndStoreSubtopics(
+          userId, topic, topicScores[topic]!, language);
     }
 
     // Close the loading dialog if it was shown
     if (context != null) Navigator.pop(context);
   }
 
-  Future<Map<String, int>> _fetchTopicScores(String userId) async {
+  Future<Map<String, int>> _fetchTopicScores(
+      String userId, String? language) async {
     final snapshot = await firestore.collection('users').doc(userId).get();
 
     if (!snapshot.exists || snapshot.data() == null) {
@@ -54,7 +53,8 @@ class LearningPathGenerator {
     }
 
     final data = snapshot.data();
-    final topicScoresList = data?['topic_scores'];
+    final topicScoresList =
+        data?['initial_assessment']?[language]?['topic_scores'];
 
     if (topicScoresList is List) {
       return {
@@ -65,18 +65,18 @@ class LearningPathGenerator {
             entry['topic'] as String: entry['score'] as int
       };
     } else {
-      print("Error: topic_scores is not a List of Maps");
+      print("Error: topic_scores for $language is not a valid List of Maps");
       return {};
     }
   }
 
   Future<void> _generateAndStoreSubtopics(
-      String userId, String topic, int score) async {
+      String userId, String topic, int score, String? language) async {
     print("in genandstore");
     int subtopicCount = score < 3 ? 7 : (score < 7 ? 5 : 3);
 
     final prompt =
-        "Generate $subtopicCount subtopics for the topic $topic in the context of Java in learning order. "
+        "Generate $subtopicCount subtopics for the topic $topic in the context of $language in learning order. "
         "Give only subtopic names, no descriptions, no numbering. "
         "Lastly, also provide a quiz title in the format 'Quiz: $topic'.";
 
@@ -86,7 +86,7 @@ class LearningPathGenerator {
     );
 
     final response = await model.generateContent([Content.text(prompt)]);
-
+    print(response.text);
     if (response.text == null || response.text!.trim().isEmpty) {
       print("Error: AI response is empty");
       return;
@@ -96,31 +96,44 @@ class LearningPathGenerator {
     await firestore
         .collection('users')
         .doc(userId)
+        .collection('languages')
+        .doc(language)
         .collection('learningPath')
         .doc(topic)
         .set({'subtopics': subtopics}, SetOptions(merge: true));
+    print("stored");
   }
 
-  Future<void> _modifyWeakSubtopics(
-      String userId, String topic, List<String> weakSubtopics) async {
+  Future<void> _modifyWeakSubtopics(String userId, String topic,
+      List<String> weakSubtopics, String? language) async {
+    print("modifying");
     final firestore = FirebaseFirestore.instance;
     final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: _apiKey);
 
     final userRef = firestore
         .collection('users')
         .doc(userId)
+        .collection('languages')
+        .doc(language)
         .collection('learningPath')
         .doc(topic);
     final userSnapshot = await userRef.get();
+    print('langggg');
+    print(language);
 
     if (!userSnapshot.exists ||
         !userSnapshot.data()!.containsKey('subtopics')) {
+      if (!userSnapshot.exists) {
+        print("no usersnap");
+      }
       print("Error: No subtopics found for $topic");
       return;
     }
     final docRef = firestore
         .collection('users')
         .doc(userId)
+        .collection('languages')
+        .doc(language)
         .collection('chapterQuiz')
         .doc(topic);
     final docSnapshot = await docRef.get();
@@ -157,7 +170,7 @@ class LearningPathGenerator {
       if (index == -1) continue; // If subtopic is not found, skip
 
       final prompt =
-          "Break down the subtopic '$weakSubtopic' from the topic '$topic' in Java into simpler concepts. "
+          "Break down the subtopic '$weakSubtopic' from the topic '$topic' in $language into simpler concepts. "
           "Only 2 or 3 new subtopics are needed. Provide only the new subtopic names, without descriptions or numbering.";
 
       final response = await model.generateContent([Content.text(prompt)]);

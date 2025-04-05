@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_highlight/themes/color-brewer.dart';
 import 'package:learnloop/pathdisplay.dart';
 import 'package:learnloop/profile.dart';
 import 'package:learnloop/settings.dart';
 import 'badges.dart';
+import 'package:provider/provider.dart';
+import 'language_provider.dart';
 import 'compiler.dart';
 import 'package:flutter_heatmap_calendar/flutter_heatmap_calendar.dart';
 import 'package:learnloop/weekly_leaderboard.dart';
@@ -22,6 +23,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   Map<DateTime, int> progressData = {}; // Initialize as a Map
   int _totalSubtopics = 1;
+  String language = ""; // Default
+
   int _completedSubtopics = 0;
   DateTime _selectedMonth = DateTime.now();
   //String currentTopic = "Loading...";
@@ -35,6 +38,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _fetchuser().then((_) {
       _fetchProgressData();
     });
+    // language = widget.language;
+
     WidgetsBinding.instance.addObserver(this);
     _fetchSubtopicProgress();
     _startTrackingTime();
@@ -104,6 +109,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final learningPathRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user)
+        .collection('languages')
+        .doc(language)
         .collection('learningPath');
 
     QuerySnapshot learningPathSnapshot = await learningPathRef.get();
@@ -134,12 +141,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _totalSubtopics = totalSubtopics > 0 ? totalSubtopics : 1;
       _completedSubtopics = completedSubtopics;
-      currentSubtopic = nextSubtopic ?? "All subtopics completed!";
+      currentSubtopic = nextSubtopic ?? "Start A New Language!";
     });
   }
 
   void _startTrackingTime() {
     _sessionStartTime = DateTime.now();
+  }
+
+  void _reloadHomepageData() {
+    _fetchSubtopicProgress(); // This will auto-update UI for currentSubtopic
+    _fetchProgressData(); // Optional if you store heatmap data per language
   }
 
   void _stopTrackingTime() async {
@@ -174,6 +186,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final languageProvider = Provider.of<LanguageProvider>(context);
+    language = languageProvider.language;
     double progress = _completedSubtopics / _totalSubtopics;
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -181,18 +195,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ? AppBar(
               backgroundColor: Color.fromARGB(255, 230, 98, 230),
               toolbarHeight: 80.0,
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  Text(
-                    "Welcome, $user!",
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Color.fromARGB(255, 248, 245, 248),
+              title: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    Text(
+                      "Welcome, $user!",
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Color.fromARGB(255, 248, 245, 248),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               leading: Builder(
                 builder: (context) => IconButton(
@@ -240,23 +256,67 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               enabled: false, // Non-clickable title
             ),
             ListTile(
-              title: Text('Java',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold, color: Colors.purple)),
+              title: Text(
+                'Java',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: language == "Java" ? Colors.purple : Colors.black,
+                ),
+              ),
               onTap: () {
-                print('Selected Java');
+                languageProvider.setLanguage("Java");
+                setState(() {
+                  language = "Java";
+                });
+                _reloadHomepageData();
               },
             ),
             ListTile(
-              title: Text('Python'),
+              title: Text(
+                'Python',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: language == "Python" ? Colors.purple : Colors.black,
+                ),
+              ),
               onTap: () {
-                print('Selected Python');
+                languageProvider.setLanguage("Python");
+                setState(() {
+                  language = "Python";
+                });
+                _reloadHomepageData();
               },
             ),
             ListTile(
-              title: Text('C++'),
+              title: Text(
+                'CPP',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: language == "CPP" ? Colors.purple : Colors.black,
+                ),
+              ),
               onTap: () {
-                print('Selected C++');
+                languageProvider.setLanguage("C++");
+                setState(() {
+                  language = "CPP";
+                });
+                _reloadHomepageData();
+              },
+            ),
+            ListTile(
+              title: Text(
+                'C',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: language == "C" ? Colors.purple : Colors.black,
+                ),
+              ),
+              onTap: () {
+                languageProvider.setLanguage("C");
+                setState(() {
+                  language = "C";
+                });
+                _reloadHomepageData();
               },
             ),
           ],
@@ -297,7 +357,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => LearningPathDisplay(),
+                            builder: (context) =>
+                                LearningPathDisplay(language: language),
                           ),
                         );
                       },
@@ -388,7 +449,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
             ),
           ),
-          LearningPathDisplay(),
+          LearningPathDisplay(
+            language: language,
+          ),
           WeeklyLeaderboard(),
           BadgesPage(),
           CompilerPage(),
