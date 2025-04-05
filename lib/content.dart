@@ -58,15 +58,18 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
 
       final response = await model.generateContent([
         Content.text(
-            "Generate some explanation about ${widget.subtopic} in the context of ${widget.language} programming language . "
-            "Make it interesting and catchy. Imagine you are teaching a 13-year-old. "
-            "Also, include examples and very simple questions. "
-            "Start the explanation with 'eexplanation:', examples with 'eexamples:', and questions with 'qquestions:'.")
+            "Generate some detailed explanation about ${widget.subtopic} in the context of ${widget.language} programming language . "
+            "Make it interesting and catchy, but do not make it overly casual. Imagine you are teaching a 13-year-old. you can sound like a textbook, just a bit more simpler. "
+            "Also, include code pieces as examples if needed only. Do not include any formatting like bold or italian. always finish explanation before you give the example."
+            "only put the code piece as example.Do not put any explanation after code piece. no need to use ``` at the start or end of code piece."
+            "when you first start the explanation, begin with 'pl:', examples with 'eex:'. do not use these headers more than once.")
       ]);
-
+      // print(response.text);
       if (response.text != null && response.text!.trim().isNotEmpty) {
         setState(() {
           subtopicData = _parseGeneratedContent(response.text!);
+          print("subbbb");
+          print(subtopicData);
           isLoading = false;
         });
       } else {
@@ -85,19 +88,22 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
     String example = '';
     List<String> questions = [];
 
-    // Use regex to extract sections based on the AI prompt structure
-    final expMatch = RegExp(r'eexplanation:(.*?)eexamples:', dotAll: true)
-        .firstMatch(response);
-    final exMatch = RegExp(r'eexamples:(.*?)qquestions:', dotAll: true)
-        .firstMatch(response);
+    final expMatch =
+        RegExp(r'pl:(.*?)(eex:|$)', dotAll: true).firstMatch(response);
+    final exMatch =
+        RegExp(r'eex:(.*?)(qquestions:|$)', dotAll: true).firstMatch(response);
     final qMatch =
         RegExp(r'qquestions:(.*)', dotAll: true).firstMatch(response);
 
     if (expMatch != null) {
       explanation = expMatch.group(1)!.trim();
+      print("plplpl");
+      print(explanation);
     }
     if (exMatch != null) {
       example = exMatch.group(1)!.trim();
+      print("xxxxxxx");
+      print(example);
     }
     if (qMatch != null) {
       questions = qMatch
@@ -115,7 +121,7 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
     };
   }
 
-  FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  /* FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
 //bool _isReminderScheduled = false;
@@ -197,7 +203,7 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
       return Future.value(true);
     });
   }
-
+*/
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -240,26 +246,36 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  "Explanation:",
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
-                                      color: Colors.black),
-                                ),
                                 SizedBox(height: 10),
                                 Text(
                                   subtopicData!['explanation'],
                                   style: TextStyle(
                                       fontSize: 16, color: Colors.black87),
                                 ),
-                                SizedBox(height: 20),
-                                Image.asset(
-                                    'assets/${widget.subtopic.replaceAll(' ', '_').toLowerCase()}.png',
-                                    height: 200,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            Container()),
+                                SizedBox(height: 10),
+                                Container(
+                                  width: double.infinity,
+                                  padding: EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors
+                                        .grey[200], // Light grey background
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    subtopicData!['example'],
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.black87,
+                                      fontFamily: 'monospace',
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(height: 10),
+                                /* Text(
+                                  subtopicData!['questions'],
+                                  style: TextStyle(
+                                      fontSize: 16, color: Colors.black87),
+                                ),*/
                               ],
                             ),
                           ),
@@ -271,8 +287,8 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
                             // Mark as finished
                             Navigator.pop(
                                 context); // ✅ Return to Subtopic List instead of moving to next subtopic
-                            scheduleInactivityReminder(); // ✅ Start Reminder for Foreground
-                            scheduleStreakReminder();
+                            // scheduleInactivityReminder(); // ✅ Start Reminder for Foreground
+                            // scheduleStreakReminder();
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
