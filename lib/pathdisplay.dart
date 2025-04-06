@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:learnloop/content.dart';
 import 'main.dart';
 import 'initial.dart';
+import 'package:lottie/lottie.dart';
 import 'services/badge service.dart';
 import 'package:learnloop/quizcontent.dart';
 
@@ -24,7 +25,7 @@ class LearningPathDisplay extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Color.fromARGB(255, 230, 98, 230),
+        backgroundColor: Color.fromARGB(255, 231, 91, 180),
         toolbarHeight: 80.0,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -50,7 +51,17 @@ class LearningPathDisplay extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return Container(
+              color: Color.fromARGB(255, 231, 91,
+                  180), // 🎨 Change this to any background color you want
+              child: Center(
+                child: Lottie.asset(
+                  'assets/lottie/loading.json',
+                  width: 200,
+                  height: 200,
+                ),
+              ),
+            );
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return Center(

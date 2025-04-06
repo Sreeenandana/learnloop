@@ -193,7 +193,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       backgroundColor: Colors.grey[100],
       appBar: _selectedIndex == 0
           ? AppBar(
-              backgroundColor: Color.fromARGB(255, 230, 98, 230),
+              backgroundColor: Color.fromARGB(255, 231, 91, 180),
               toolbarHeight: 80.0,
               title: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -222,106 +222,125 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           : null,
 
       drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
+        child: Column(
           children: [
             DrawerHeader(
               decoration: BoxDecoration(
-                color: Color.fromARGB(255, 230, 98, 230),
+                color: Color.fromARGB(255, 231, 91, 180),
               ),
-              child: Text(
-                'Menu',
-                style: TextStyle(fontSize: 24, color: Colors.white),
+              child: Center(
+                child: Text(
+                  'MENU',
+                  style: TextStyle(
+                    fontSize: 50,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  ListTile(
+                    title: Text('Languages'),
+                    enabled: false,
+                  ),
+                  ListTile(
+                    title: Text(
+                      'Java',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color:
+                            language == "Java" ? Colors.purple : Colors.black,
+                      ),
+                    ),
+                    onTap: () {
+                      languageProvider.setLanguage("Java");
+                      setState(() {
+                        language = "Java";
+                      });
+                      _reloadHomepageData();
+                    },
+                  ),
+                  ListTile(
+                    title: Text(
+                      'Python',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color:
+                            language == "Python" ? Colors.purple : Colors.black,
+                      ),
+                    ),
+                    onTap: () {
+                      languageProvider.setLanguage("Python");
+                      setState(() {
+                        language = "Python";
+                      });
+                      _reloadHomepageData();
+                    },
+                  ),
+                  ListTile(
+                    title: Text(
+                      'C++',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: language == "CPP" ? Colors.purple : Colors.black,
+                      ),
+                    ),
+                    onTap: () {
+                      languageProvider.setLanguage("CPP");
+                      setState(() {
+                        language = "CPP";
+                      });
+                      _reloadHomepageData();
+                    },
+                  ),
+                  ListTile(
+                    title: Text(
+                      'C',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: language == "C" ? Colors.purple : Colors.black,
+                      ),
+                    ),
+                    onTap: () {
+                      languageProvider.setLanguage("C");
+                      setState(() {
+                        language = "C";
+                      });
+                      _reloadHomepageData();
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Divider(),
+            ListTile(
+              leading: Icon(Icons.person),
+              title: Text('Profile'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => ProfilePage()),
+                );
+              },
             ),
             ListTile(
               leading: Icon(Icons.settings),
               title: Text('Settings'),
               onTap: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => SettingsPage()));
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.person),
-              title: Text('Profile'),
-              onTap: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => ProfilePage()));
-              },
-            ),
-            Divider(),
-            ListTile(
-              title: Text('Languages'),
-              enabled: false, // Non-clickable title
-            ),
-            ListTile(
-              title: Text(
-                'Java',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: language == "Java" ? Colors.purple : Colors.black,
-                ),
-              ),
-              onTap: () {
-                languageProvider.setLanguage("Java");
-                setState(() {
-                  language = "Java";
-                });
-                _reloadHomepageData();
-              },
-            ),
-            ListTile(
-              title: Text(
-                'Python',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: language == "Python" ? Colors.purple : Colors.black,
-                ),
-              ),
-              onTap: () {
-                languageProvider.setLanguage("Python");
-                setState(() {
-                  language = "Python";
-                });
-                _reloadHomepageData();
-              },
-            ),
-            ListTile(
-              title: Text(
-                'CPP',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: language == "CPP" ? Colors.purple : Colors.black,
-                ),
-              ),
-              onTap: () {
-                languageProvider.setLanguage("C++");
-                setState(() {
-                  language = "CPP";
-                });
-                _reloadHomepageData();
-              },
-            ),
-            ListTile(
-              title: Text(
-                'C',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: language == "C" ? Colors.purple : Colors.black,
-                ),
-              ),
-              onTap: () {
-                languageProvider.setLanguage("C");
-                setState(() {
-                  language = "C";
-                });
-                _reloadHomepageData();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => SettingsPage()),
+                );
               },
             ),
           ],
         ),
       ),
+
 // No AppBar for other pages
       body: IndexedStack(
         index: _selectedIndex,
@@ -343,7 +362,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Color.fromARGB(255, 230, 98, 230),
+                          color: Color.fromARGB(255, 231, 91, 180),
                         ),
                       ),
                       progressColor: Colors.pink,
@@ -376,7 +395,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             padding: EdgeInsets.symmetric(
                                 vertical: 12, horizontal: 16),
                             decoration: BoxDecoration(
-                              color: Color.fromARGB(255, 230, 98, 230),
+                              color: Color.fromARGB(255, 231, 91, 180),
                               borderRadius: BorderRadius.circular(8),
                               boxShadow: [
                                 BoxShadow(
@@ -472,7 +491,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           BottomNavigationBarItem(
               icon: Icon(Icons.computer), label: 'Practice'),
         ],
-        selectedItemColor: Color.fromARGB(255, 230, 98, 230),
+        selectedItemColor: Color.fromARGB(255, 231, 91, 180),
         unselectedItemColor: Colors.grey,
         backgroundColor: Colors.white,
         type: BottomNavigationBarType.fixed,

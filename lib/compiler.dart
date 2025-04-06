@@ -60,7 +60,7 @@ class _CompilerPageState extends State<CompilerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Color.fromARGB(255, 230, 98, 230),
+        backgroundColor: Color.fromARGB(255, 231, 91, 180),
         toolbarHeight: 80.0,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -117,7 +117,7 @@ class _CompilerPageState extends State<CompilerPage> {
               onPressed: isLoading ? null : runCode,
               child: Text("Run Code"),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color.fromARGB(255, 230, 98, 230),
+                backgroundColor: Color.fromARGB(255, 231, 91, 180),
                 foregroundColor: Colors.white,
               ),
             ),

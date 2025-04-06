@@ -7,7 +7,7 @@ class LanguageSelectionPage extends StatefulWidget {
 }
 
 class _LanguageSelectionPageState extends State<LanguageSelectionPage> {
-  final List<String> _languages = ["Java", "Python", "C++", "C"];
+  final List<String> _languages = ["Java", "Python", "CPP", "C"];
   String? _language;
 
   @override

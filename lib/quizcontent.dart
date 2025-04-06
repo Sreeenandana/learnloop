@@ -5,6 +5,7 @@ import 'weekly_leaderboard.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import 'pathgen.dart';
+import 'package:lottie/lottie.dart';
 import 'services/badge service.dart';
 import 'main.dart';
 import 'reviewqstns.dart';
@@ -97,7 +98,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         await _fetchSubtopicsFromFirestore(topic, language);
     String subtopicsString = subtopics.join(', ');
 
-    return "Generate 5 multiple choice questions (MCQs) about $language, on topic $topic. "
+    return "Generate 20 multiple choice questions (MCQs) about $language, on topic $topic. "
         "Focus on the following subtopics: $subtopicsString. "
         "Each question must be structured as follows:"
         "qstn: [Question text]\n"
@@ -474,8 +475,17 @@ class _ChapterQuizState extends State<ChapterQuiz> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Quiz')),
-        body: const Center(child: CircularProgressIndicator()),
+        appBar: AppBar(title: const Text('Loading Topics')),
+        body: Container(
+          color: Color.fromARGB(255, 231, 91, 180),
+          child: Center(
+            child: Lottie.asset(
+              'assets/lottie/loading.json',
+              width: 200,
+              height: 200,
+            ),
+          ),
+        ),
       );
     }
 

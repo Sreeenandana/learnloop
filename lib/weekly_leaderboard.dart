@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:lottie/lottie.dart';
 
 class WeeklyLeaderboard extends StatelessWidget {
   const WeeklyLeaderboard({super.key}); // Add const
@@ -8,7 +9,7 @@ class WeeklyLeaderboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Color.fromARGB(255, 230, 98, 230),
+        backgroundColor: Color.fromARGB(255, 231, 91, 180),
         toolbarHeight: 80.0,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -33,7 +34,16 @@ class WeeklyLeaderboard extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return Container(
+              color: Color.fromARGB(255, 231, 91, 180),
+              child: Center(
+                child: Lottie.asset(
+                  'assets/lottie/loading.json',
+                  width: 200,
+                  height: 200,
+                ),
+              ),
+            );
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -68,7 +78,7 @@ class WeeklyLeaderboard extends StatelessWidget {
                     color: Colors.brown, size: 40); // Bronze
               } else {
                 leadingWidget = CircleAvatar(
-                  backgroundColor: Color.fromARGB(255, 183, 77, 183),
+                  backgroundColor: Color.fromARGB(255, 231, 91, 180),
                   child: Text((index + 1).toString(),
                       style: const TextStyle(color: Colors.white)),
                 );

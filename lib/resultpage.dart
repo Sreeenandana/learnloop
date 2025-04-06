@@ -119,11 +119,11 @@ class ResultPage extends StatelessWidget {
                   final generator = LearningPathGenerator();
 
                   // Show loading dialog with quotes
-                  showDialog(
+                  /* showDialog(
                     context: context,
                     barrierDismissible: false,
                     builder: (context) => FullScreenLoadingDialog(),
-                  );
+                  );*/
 
                   await generator.generateOrModifyLearningPath(
                       context: context,
@@ -229,46 +229,5 @@ class ResultPage extends StatelessWidget {
     } catch (e) {
       print("Error saving results: $e");
     }
-  }
-}
-
-class FullScreenLoadingDialog extends StatelessWidget {
-  final List<String> quotes = [
-    "Learning never exhausts the mind. – Leonardo da Vinci",
-    "Education is the passport to the future. – Malcolm X",
-    "The beautiful thing about learning is that no one can take it away from you. – B.B. King",
-    "An investment in knowledge pays the best interest. – Benjamin Franklin",
-    "Success is the sum of small efforts, repeated day in and day out. – Robert Collier"
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    String randomQuote = (quotes..shuffle()).first;
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30),
-              child: Text(
-                randomQuote,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 
 class BadgesPage extends StatelessWidget {
   const BadgesPage({super.key});
@@ -14,7 +15,7 @@ class BadgesPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Color.fromARGB(255, 230, 98, 230),
+        backgroundColor: Color.fromARGB(255, 231, 91, 180),
         toolbarHeight: 80.0,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -35,7 +36,18 @@ class BadgesPage extends StatelessWidget {
         future: _getCurrentUserId(),
         builder: (context, userSnapshot) {
           if (userSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            AppBar(backgroundColor: Color.fromARGB(255, 231, 91, 180));
+            return Container(
+              color: Color.fromARGB(
+                  255, 231, 91, 180), // 🎨 Set any background color here
+              child: Center(
+                child: Lottie.asset(
+                  'assets/lottie/loading.json',
+                  width: 200,
+                  height: 200,
+                ),
+              ),
+            );
           }
 
           if (!userSnapshot.hasData || userSnapshot.data == null) {
@@ -51,8 +63,18 @@ class BadgesPage extends StatelessWidget {
                 .collection('badges')
                 .snapshots(),
             builder: (context, badgeSnapshot) {
-              if (badgeSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+              if (userSnapshot.connectionState == ConnectionState.waiting) {
+                return Container(
+                  color: Color.fromARGB(
+                      255, 231, 91, 180), // 🎨 Set any background color here
+                  child: Center(
+                    child: Lottie.asset(
+                      'assets/lottie/loading.json',
+                      width: 200,
+                      height: 200,
+                    ),
+                  ),
+                );
               }
 
               if (!badgeSnapshot.hasData || badgeSnapshot.data!.docs.isEmpty) {

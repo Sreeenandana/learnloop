@@ -4,16 +4,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:lottie/lottie.dart';
 
 class LearningPathGenerator {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final String _apiKey = 'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44';
   //final String? language ='';
-  final List<String> motivationalQuotes = [
-    "aa",
-    "vv",
-  ];
 
   Future<void> generateOrModifyLearningPath(
       {BuildContext? context,
@@ -205,29 +202,26 @@ class LearningPathGenerator {
         .toList();
   }
 
-  // Show loading dialog with a random motivational quote
   void _showLoadingDialog(BuildContext context) {
-    final random = Random();
-    String quote =
-        motivationalQuotes[random.nextInt(motivationalQuotes.length)];
-
     showDialog(
       context: context,
-      barrierDismissible: false, // Prevent closing until loading completes
+      barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
+          backgroundColor: Color.fromARGB(255, 231, 91, 180),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 20),
-              Text(
-                quote,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontStyle: FontStyle.italic),
+              Lottie.asset(
+                'assets/lottie/loading.json',
+                width: 150,
+                height: 150,
+                fit: BoxFit.cover,
               ),
             ],
           ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         );
       },
     );

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:collection';
+import 'package:lottie/lottie.dart';
 import 'pathgen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:learnloop/home.dart';
@@ -44,7 +45,16 @@ class _QuizPageState extends State<QuizPage> {
     if (_isLoadingTopics) {
       return Scaffold(
         appBar: AppBar(title: const Text('Loading Topics')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: Container(
+          color: Color.fromARGB(255, 231, 91, 180), // Set background color
+          child: Center(
+            child: Lottie.asset(
+              'assets/lottie/loading.json',
+              width: 200,
+              height: 200,
+            ),
+          ),
+        ),
       );
     }
 
@@ -281,7 +291,7 @@ class _QuizPageState extends State<QuizPage> {
 
     List<Map<String, dynamic>> generatedQuestions = [];
     int questionsPerTopic =
-        (5 / _selectedTopics.length).ceil(); // Distribute 20 questions
+        (20 / _selectedTopics.length).ceil(); // Distribute 20 questions
 
     for (var topic in _selectedTopics) {
       try {
@@ -361,10 +371,19 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   Widget _buildQuizUI() {
-    if (_isLoadingQuestions) {
+    if (_isLoadingTopics) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Quiz')),
-        body: const Center(child: CircularProgressIndicator()),
+        appBar: AppBar(title: const Text('Loading Topics')),
+        body: Container(
+          color: Color.fromARGB(255, 231, 91, 180), // Set background color
+          child: Center(
+            child: Lottie.asset(
+              'assets/lottie/loading.json',
+              width: 200,
+              height: 200,
+            ),
+          ),
+        ),
       );
     }
 

@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
+import 'package:lottie/lottie.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -290,7 +291,16 @@ class _ProfilePageState extends State<ProfileSettings> {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Container(
+              color: Color.fromARGB(255, 231, 91, 180),
+              child: Center(
+                child: Lottie.asset(
+                  'assets/lottie/loading.json',
+                  width: 200,
+                  height: 200,
+                ),
+              ),
+            )
           : Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -490,7 +500,16 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
               ),
               const SizedBox(height: 20),
               _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? Container(
+                      color: Color.fromARGB(255, 231, 91, 180),
+                      child: Center(
+                        child: Lottie.asset(
+                          'assets/lottie/loading.json',
+                          width: 200,
+                          height: 200,
+                        ),
+                      ),
+                    )
                   : ElevatedButton(
                       onPressed: _changePassword,
                       child: const Text('Update Password'),

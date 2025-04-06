@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:lottie/lottie.dart';
 
 class ReviewScreen extends StatefulWidget {
   final List<dynamic> incorrectQuestions;
@@ -64,9 +65,17 @@ class _ReviewScreenState extends State<ReviewScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body:
-            Center(child: CircularProgressIndicator()), // Show loading spinner
+      return Scaffold(
+        body: Container(
+          color: Color.fromARGB(255, 231, 91, 180),
+          child: Center(
+            child: Lottie.asset(
+              'assets/lottie/loading.json',
+              width: 200,
+              height: 200,
+            ),
+          ),
+        ),
       );
     }
 

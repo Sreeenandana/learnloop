@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:lottie/lottie.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -51,8 +52,16 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       appBar: AppBar(title: const Text("Profile")),
       body: isLoading
-          ? const Center(
-              child: CircularProgressIndicator()) // Show loading indicator
+          ? Container(
+              color: Color.fromARGB(255, 231, 91, 180),
+              child: Center(
+                child: Lottie.asset(
+                  'assets/lottie/loading.json',
+                  width: 200,
+                  height: 200,
+                ),
+              ),
+            )
           : Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -60,7 +69,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 children: [
                   CircleAvatar(
                     radius: 50,
-                    backgroundColor: Color.fromARGB(255, 183, 77, 183),
+                    backgroundColor: Color.fromARGB(255, 231, 91, 180),
                     child: Text(
                       userName.isNotEmpty ? userName[0].toUpperCase() : "?",
                       style: const TextStyle(fontSize: 40, color: Colors.white),

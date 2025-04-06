@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:async';
+import 'package:lottie/lottie.dart';
 import 'package:workmanager/workmanager.dart';
 
 class SubtopicContentPage extends StatefulWidget {
@@ -290,106 +291,108 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
         iconTheme: IconThemeData(color: Colors.white),
       ),
       body: isLoading
-          ? Center(child: CircularProgressIndicator())
-          : errorMessage != null
-              ? Center(
-                  child: Text(
-                    errorMessage!,
-                    style: TextStyle(color: Colors.red, fontSize: 16),
-                  ),
-                )
-              : Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Card(
-                          elevation: 3,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          color: Colors.white,
-                          child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                SizedBox(height: 10),
-                                Text(
-                                  subtopicData!['explanation'],
-                                  style: TextStyle(
-                                      fontSize: 16, color: Colors.black87),
-                                ),
-                                SizedBox(height: 10),
-                                Container(
-                                  width: double.infinity,
-                                  padding: EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[200],
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    subtopicData!['example'],
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.black87,
-                                      fontFamily: 'monospace',
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 20),
-                        if (practiceData != null &&
-                            practiceData!.isNotEmpty) ...[
-                          Text(
-                            'Practice Session',
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 10),
-                          ...practiceData!.map<Widget>((q) {
-                            switch (q['type']) {
-                              case 'mcq':
-                                return _buildMCQ(q);
-                              case 'fill':
-                                return _buildFill(q);
-                              default:
-                                return SizedBox();
-                            }
-                          }).toList(),
-                        ],
-                        SizedBox(height: 30),
-                        ElevatedButton(
-                          onPressed: () {
-                            widget.onSubtopicFinished();
-                            Navigator.pop(context);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Mark as Finished',
+          ? Container(
+              color: Color.fromARGB(
+                  255, 231, 91, 180), // Set any background color here
+              child: Center(
+                child: Lottie.asset(
+                  'assets/lottie/loading.json',
+                  width: 200,
+                  height: 200,
+                ),
+              ),
+            )
+          : Padding(
+              padding: EdgeInsets.all(16.0),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Card(
+                      elevation: 3,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      color: Colors.white,
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(height: 10),
+                            Text(
+                              subtopicData!['explanation'],
                               style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                  fontSize: 16, color: Colors.black87),
+                            ),
+                            SizedBox(height: 10),
+                            Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                subtopicData!['example'],
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.black87,
+                                  fontFamily: 'monospace',
+                                ),
                               ),
                             ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    if (practiceData != null && practiceData!.isNotEmpty) ...[
+                      Text(
+                        'Practice Session',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 10),
+                      ...practiceData!.map<Widget>((q) {
+                        switch (q['type']) {
+                          case 'mcq':
+                            return _buildMCQ(q);
+                          case 'fill':
+                            return _buildFill(q);
+                          default:
+                            return SizedBox();
+                        }
+                      }).toList(),
+                    ],
+                    SizedBox(height: 30),
+                    ElevatedButton(
+                      onPressed: () {
+                        widget.onSubtopicFinished();
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Mark as Finished',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
+              ),
+            ),
     );
   }
 }
