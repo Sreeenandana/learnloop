@@ -57,7 +57,7 @@ class LearningPathDisplay extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("No learning path available"),
+                  const Text("Start Learning Now!!"),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
@@ -102,8 +102,8 @@ class LearningPathDisplay extends StatelessWidget {
                 double progress =
                     subtopics.isEmpty ? 0 : completedCount / subtopics.length;
 
-                return _buildTopicCard(
-                    context, userId, topicName, subtopics, progress);
+                return _buildTopicCard(context, userId, topicName, subtopics,
+                    progress, index, topics);
               },
             ),
           );
@@ -112,8 +112,14 @@ class LearningPathDisplay extends StatelessWidget {
     );
   }
 
-  Widget _buildTopicCard(BuildContext context, String userId, String topicName,
-      List<dynamic> subtopics, double progress) {
+  Widget _buildTopicCard(
+      BuildContext context,
+      String userId,
+      String topicName,
+      List<dynamic> subtopics,
+      double progress,
+      int topicIndex,
+      List<QueryDocumentSnapshot> allTopics) {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 4,
@@ -140,20 +146,77 @@ class LearningPathDisplay extends StatelessWidget {
             ),
             const Divider(),
             Column(
-              children: subtopics.map((subtopic) {
+              children: List.generate(subtopics.length, (i) {
+                final subtopic = subtopics[i];
                 final subtopicName = subtopic['name'] ?? 'Unknown';
                 final isCompleted = subtopic['status'] == 'completed';
+                final subtopicIndex = subtopics.indexOf(subtopic);
+                final isQuiz =
+                    subtopic['name'].toLowerCase().startsWith('quiz');
+                bool isLocked = false;
+
+// Lock only non-quiz subtopics unless previous one is completed
+                if (!isQuiz) {
+                  if (subtopicIndex > 0) {
+                    final prevSubtopic = subtopics[subtopicIndex - 1];
+                    isLocked = prevSubtopic['status'] != 'completed';
+                  }
+                }
+
+                bool isEnabled = false;
+
+                // ✅ Case 1: Subtopic is completed
+                if (isCompleted) {
+                  isEnabled = true;
+                }
+                // ✅ Case 2: It's the first subtopic in topic
+                else if (i == 0) {
+                  // 🔐 Check if it's the first topic
+                  if (topicIndex == 0) {
+                    isEnabled = true; // allow first subtopic of first topic
+                  } else {
+                    // Get previous topic's last subtopic
+                    final prevTopic = allTopics[topicIndex - 1];
+                    final prevSubtopics = prevTopic['subtopics'] ?? [];
+                    final lastPrevSub =
+                        prevSubtopics.isNotEmpty ? prevSubtopics.last : null;
+
+                    // Allow only if previous topic's last subtopic (quiz) is completed
+                    if (lastPrevSub != null &&
+                        lastPrevSub['status'] == 'completed') {
+                      isEnabled = true;
+                    }
+                  }
+                }
+                // ✅ Case 3: It's the next one after a completed subtopic
+                else if (i > 0 && subtopics[i - 1]['status'] == 'completed') {
+                  isEnabled = true;
+                }
 
                 return ListTile(
-                  title: Text(subtopicName),
-                  subtitle: Text(isCompleted ? "Completed" : "Pending"),
+                  title: Text(
+                    subtopicName,
+                    style: TextStyle(
+                        color: isEnabled ? Colors.black : Colors.grey),
+                  ),
+                  subtitle: Text(
+                    isCompleted
+                        ? "Completed"
+                        : isEnabled
+                            ? "Available"
+                            : "Locked",
+                  ),
                   trailing: isCompleted
                       ? const Icon(Icons.check_circle, color: Colors.green)
-                      : const Icon(Icons.radio_button_unchecked),
-                  onTap: () => _handleSubtopicTap(
-                      context, userId, topicName, subtopics, subtopicName),
+                      : isEnabled
+                          ? const Icon(Icons.radio_button_unchecked)
+                          : const Icon(Icons.lock, color: Colors.grey),
+                  onTap: isLocked
+                      ? null
+                      : () => _handleSubtopicTap(
+                          context, userId, topicName, subtopics, subtopic),
                 );
-              }).toList(),
+              }),
             ),
           ],
         ),
@@ -162,16 +225,18 @@ class LearningPathDisplay extends StatelessWidget {
   }
 
   void _handleSubtopicTap(BuildContext context, String userId, String topic,
-      List<dynamic> subtopics, String subtopic) {
-    if (subtopic.toLowerCase().startsWith("quiz")) {
-      _navigateToQuiz(context, userId, topic, subtopics, subtopic);
+      List<dynamic> subtopics, Map<String, dynamic> subtopic) {
+    final subtopicName = subtopic['name']?.toString().toLowerCase() ?? '';
+
+    if (subtopicName.startsWith("quiz")) {
+      _navigateToQuiz(context, userId, topic, subtopics, subtopic['name']);
     } else {
-      _navigateToContent(context, userId, topic, subtopics, subtopic);
+      _navigateToContent(context, userId, topic, subtopics, subtopic['name']);
     }
   }
 
   void _navigateToQuiz(BuildContext context, String userId, String topic,
-      List<dynamic> subtopics, String subtopic) {
+      List<dynamic> subtopics, Map<String, dynamic> subtopic) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -180,8 +245,8 @@ class LearningPathDisplay extends StatelessWidget {
           topic: topic,
           language: language,
           onQuizFinished: () {
-            _markSubtopicCompleted(context, userId, topic, subtopics,
-                subtopic); // Close quiz screen after completion
+            _markSubtopicCompleted(
+                context, userId, topic, subtopics, subtopic['name']);
           },
         ),
       ),

@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:collection';
+import 'pathgen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:learnloop/home.dart';
 import 'resultpage.dart';
 
 class QuizPage extends StatefulWidget {
@@ -118,6 +120,26 @@ class _QuizPageState extends State<QuizPage> {
     });
   }
 
+  Future<void> _skipAssessmentAndAssignTopicScores() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    // Fetch topics for the selected language
+    await _fetchTopics(language); // make sure this awaits topic loading
+
+    await FirebaseFirestore.instance.collection('users').doc(userId).set({
+      'initial_assessment': {
+        language: {
+          'initial_marks': 0,
+          'initial_qstns': 0,
+          'topic_scores': _topics.map((t) => {'topic': t, 'score': 0}).toList(),
+        }
+      },
+      'streak': 0,
+      'totalPoints': 0,
+    }, SetOptions(merge: true));
+  }
+
   Widget _buildTopicSelectionUI() {
     return Scaffold(
       appBar: AppBar(
@@ -181,23 +203,56 @@ class _QuizPageState extends State<QuizPage> {
               ),
 
               // Start Quiz Button
-              Align(
-                alignment: Alignment.center,
-                child: ElevatedButton(
-                  onPressed: _selectedTopics.isNotEmpty ? _startQuiz : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 30, vertical: 14),
-                    backgroundColor: Colors.white,
-                    foregroundColor: Color(0xFFdda0dd),
-                    textStyle: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Align(
+                    alignment: Alignment.center,
+                    child: ElevatedButton(
+                      onPressed: _selectedTopics.isNotEmpty ? _startQuiz : null,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 30, vertical: 14),
+                        backgroundColor: Colors.white,
+                        foregroundColor: Color(0xFFdda0dd),
+                        textStyle: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text("Start Quiz"),
                     ),
                   ),
-                  child: const Text("Start Quiz"),
-                ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.center,
+                    child: TextButton(
+                      onPressed: () async {
+                        await _skipAssessmentAndAssignTopicScores();
+                        final generator = LearningPathGenerator();
+                        await generator.generateOrModifyLearningPath(
+                            context: context, language: language);
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => HomePage(),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        "Skip",
+                        style: TextStyle(
+                          color: Colors.blueAccent,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          decoration: TextDecoration.underline,
+                          decorationColor: Colors.blueAccent,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

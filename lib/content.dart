@@ -28,7 +28,7 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
   // final BadgeService _badgeService = BadgeService();
   final String _apiKey = 'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44';
   Map<String, dynamic>? subtopicData;
-  bool _isReminderScheduled = false;
+  List<Map<String, dynamic>>? practiceData;
   bool isLoading = true;
   String? errorMessage;
   Timer? _inactivityTimer;
@@ -43,6 +43,109 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
   void dispose() {
     _inactivityTimer?.cancel();
     super.dispose();
+  }
+
+  Widget _buildMCQ(Map<String, dynamic> q) {
+    String? selected;
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return Card(
+          margin: EdgeInsets.symmetric(vertical: 10),
+          child: Padding(
+            padding: EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(q['question'], style: TextStyle(fontSize: 16)),
+                SizedBox(height: 8),
+                ...q['options'].map<Widget>((opt) {
+                  return RadioListTile<String>(
+                    title: Text(opt),
+                    value: opt[0], // Use A, B, C, D as value
+                    groupValue: selected,
+                    onChanged: (val) {
+                      setState(() => selected = val);
+                    },
+                  );
+                }).toList(),
+                if (selected != null)
+                  Text(
+                    selected == q['answer']
+                        ? 'Correct!'
+                        : 'Wrong! Answer: ${q['answer']}',
+                    style: TextStyle(
+                      color:
+                          selected == q['answer'] ? Colors.green : Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMatch(Map<String, dynamic> q) {
+    return Card(
+      margin: EdgeInsets.symmetric(vertical: 10),
+      child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Match the following:', style: TextStyle(fontSize: 16)),
+            SizedBox(height: 6),
+            Text(q['pairs'], style: TextStyle(fontFamily: 'monospace')),
+            SizedBox(height: 6),
+            Text('Answer: ${q['answer']}',
+                style: TextStyle(color: Colors.grey[700]))
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFill(Map<String, dynamic> q) {
+    final controller = TextEditingController();
+    bool submitted = false;
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return Card(
+          margin: EdgeInsets.symmetric(vertical: 10),
+          child: Padding(
+            padding: EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(q['question'], style: TextStyle(fontSize: 16)),
+                TextField(controller: controller),
+                SizedBox(height: 6),
+                ElevatedButton(
+                  onPressed: () => setState(() => submitted = true),
+                  child: Text('Check'),
+                ),
+                if (submitted)
+                  Text(
+                    controller.text.trim().toLowerCase() ==
+                            q['answer'].toString().toLowerCase()
+                        ? 'Correct!'
+                        : 'Wrong! Answer: ${q['answer']}',
+                    style: TextStyle(
+                      color: controller.text.trim().toLowerCase() ==
+                              q['answer'].toString().toLowerCase()
+                          ? Colors.green
+                          : Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _fetchSubtopicContent() async {
@@ -64,10 +167,22 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
             "only put the code piece as example.Do not put any explanation after code piece. no need to use ``` at the start or end of code piece."
             "when you first start the explanation, begin with 'pl:', examples with 'eex:'. do not use these headers more than once.")
       ]);
+
+      final practiceResponse = await model.generateContent([
+        Content.text(
+            "Generate a practice session with 3 diverse questions for the subtopic '${widget.subtopic}' in ${widget.language}. "
+            "The format should be strictly as follows:\n"
+            " mcq: What does X mean?\nA. Option1\nB. Option2\nC. Option3\nD. Option4\nAnswer: B\n"
+            " fill: A variable that holds multiple values is called a ______.\nAnswer: list\n"
+            "Do not include any explanation. Do not include any labels or headers.")
+      ]);
+
       // print(response.text);
       if (response.text != null && response.text!.trim().isNotEmpty) {
         setState(() {
           subtopicData = _parseGeneratedContent(response.text!);
+          practiceData = _parsePracticeQuestions(practiceResponse.text!)
+              .cast<Map<String, dynamic>>();
           print("subbbb");
           print(subtopicData);
           isLoading = false;
@@ -81,6 +196,43 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
         isLoading = false;
       });
     }
+  }
+
+  List<Map> _parsePracticeQuestions(String practiceText) {
+    final questions = practiceText.split(RegExp(r'\n(?=\d\.)'));
+
+    return questions.map((q) {
+      if (q.contains("mcq:")) {
+        final parts = q.split('\n');
+        final question =
+            parts[0].replaceFirst(RegExp(r'\d\.\s*mcq:'), '').trim();
+        final options = parts.sublist(1, 5).map((o) => o.trim()).toList();
+        final answer = parts
+            .firstWhere((line) => line.startsWith('Answer:'))
+            .split(':')[1]
+            .trim();
+
+        return {
+          'type': 'mcq',
+          'question': question,
+          'options': options,
+          'answer': answer,
+        };
+      } else if (q.contains("fill:")) {
+        final fillParts = q.split('Answer:');
+        final question =
+            fillParts[0].replaceFirst(RegExp(r'\d\.\s*fill:'), '').trim();
+        final answer = fillParts[1].trim();
+
+        return {
+          'type': 'fill',
+          'question': question,
+          'answer': answer,
+        };
+      } else {
+        return {};
+      }
+    }).toList();
   }
 
   Map<String, dynamic> _parseGeneratedContent(String response) {
@@ -121,89 +273,6 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
     };
   }
 
-  /* FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-
-//bool _isReminderScheduled = false;
-
-  void initNotifications() async {
-    // Initialize notifications
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    final InitializationSettings initializationSettings =
-        InitializationSettings(
-      android: initializationSettingsAndroid,
-    );
-
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-    // Initialize WorkManager
-    Workmanager().initialize(
-      callbackDispatcher,
-      isInDebugMode: false,
-    );
-  }
-
-  void scheduleInactivityReminder() {
-    if (!_isReminderScheduled) {
-      _isReminderScheduled = true;
-      Future.delayed(Duration(minutes: 1), () {
-        if (_isReminderScheduled) {
-          showNotification(
-            "📢 Keep Learning!",
-            "You haven't interacted with Java topics. Continue your progress!",
-          );
-        }
-      });
-
-      print("⏳ Inactivity Reminder Scheduled for 1 minute.");
-    }
-  }
-
-  void scheduleStreakReminder() {
-    Workmanager().registerOneOffTask(
-      "streak_reminder_task",
-      "showStreakReminder",
-      initialDelay: Duration(hours: 20),
-    );
-
-    print("🔥 Streak Reminder Scheduled for 20 hours.");
-  }
-
-  void showNotification(String title, String body) async {
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
-      'reminder_channel',
-      'Learning Reminders',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
-
-    const NotificationDetails platformChannelSpecifics =
-        NotificationDetails(android: androidPlatformChannelSpecifics);
-
-    await flutterLocalNotificationsPlugin.show(
-      0, // Unique ID
-      title,
-      body,
-      platformChannelSpecifics,
-    );
-  }
-
-// Background execution
-  void callbackDispatcher() {
-    Workmanager().executeTask((task, inputData) {
-      if (task == "streak_reminder_task") {
-        showNotification(
-          "⚠️ Streak Warning!",
-          "Your learning streak is about to be lost. Open the app now!",
-        );
-      }
-      return Future.value(true);
-    });
-  }
-*/
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -257,8 +326,7 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
                                   width: double.infinity,
                                   padding: EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: Colors
-                                        .grey[200], // Light grey background
+                                    color: Colors.grey[200],
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
@@ -270,25 +338,35 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
                                     ),
                                   ),
                                 ),
-                                SizedBox(height: 10),
-                                /* Text(
-                                  subtopicData!['questions'],
-                                  style: TextStyle(
-                                      fontSize: 16, color: Colors.black87),
-                                ),*/
                               ],
                             ),
                           ),
                         ),
                         SizedBox(height: 20),
+                        if (practiceData != null &&
+                            practiceData!.isNotEmpty) ...[
+                          Text(
+                            'Practice Session',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          SizedBox(height: 10),
+                          ...practiceData!.map<Widget>((q) {
+                            switch (q['type']) {
+                              case 'mcq':
+                                return _buildMCQ(q);
+                              case 'fill':
+                                return _buildFill(q);
+                              default:
+                                return SizedBox();
+                            }
+                          }).toList(),
+                        ],
+                        SizedBox(height: 30),
                         ElevatedButton(
                           onPressed: () {
                             widget.onSubtopicFinished();
-                            // Mark as finished
-                            Navigator.pop(
-                                context); // ✅ Return to Subtopic List instead of moving to next subtopic
-                            // scheduleInactivityReminder(); // ✅ Start Reminder for Foreground
-                            // scheduleStreakReminder();
+                            Navigator.pop(context);
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
@@ -301,9 +379,10 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
                             child: Text(
                               'Mark as Finished',
                               style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white),
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
