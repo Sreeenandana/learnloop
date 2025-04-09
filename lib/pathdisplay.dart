@@ -246,24 +246,6 @@ class LearningPathDisplay extends StatelessWidget {
     }
   }
 
-  void _navigateToQuiz(BuildContext context, String userId, String topic,
-      List<dynamic> subtopics, Map<String, dynamic> subtopic) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ChapterQuiz(
-          userId: userId,
-          topic: topic,
-          language: language,
-          onQuizFinished: () {
-            _markSubtopicCompleted(
-                context, userId, topic, subtopics, subtopic['name']);
-          },
-        ),
-      ),
-    );
-  }
-
   void _navigateToContent(BuildContext context, String userId, String topic,
       List<dynamic> subtopics, String subtopic) {
     print("in nav to contnt");
@@ -277,6 +259,43 @@ class LearningPathDisplay extends StatelessWidget {
           subtopic: subtopic,
           onSubtopicFinished: () => _markSubtopicCompleted(
               context, userId, topic, subtopics, subtopic),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToQuiz(BuildContext context, String userId, String topic,
+      List<dynamic> subtopics, dynamic subtopic) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChapterQuiz(
+          userId: userId,
+          topic: topic,
+          language: language,
+          onQuizFinished: (bool passed) {
+            if (passed) {
+              print("Subtopic type: ${subtopic.runtimeType}");
+              print("Subtopic value: $subtopic");
+
+              _markSubtopicCompleted(
+                context,
+                userId,
+                topic,
+                subtopics,
+                subtopic is Map
+                    ? subtopic['name']
+                    : subtopic, // fallback if it's a string
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text("Quiz not passed. Try again!"),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
         ),
       ),
     );

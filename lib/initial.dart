@@ -92,14 +92,14 @@ class _QuizPageState extends State<QuizPage> {
 
     List<String> cpptopics = [
       "1. Introduction to C++"
-          "2. Data Types, Variables & Operators"
-          "3. Control Flow (Conditions & Loops)"
-          "4. Arrays, Strings & Pointers"
-          "5. Functions & Recursion"
-          "6. Structures, Unions & Enums"
-          "7. Object-Oriented Programming in CPP"
-          "8. File Handling"
-          "9. Memory Management & Advanced Concepts"
+          "2. Data Types, Variables & Operators",
+      "3. Control Flow (Conditions & Loops)",
+      "4. Arrays, Strings & Pointers",
+      "5. Functions & Recursion",
+      "6. Structures, Unions & Enums",
+      "7. Object-Oriented Programming in CPP",
+      "8. File Handling",
+      "9. Memory Management & Advanced Concepts"
     ];
 
     List<String> ctopics = [
@@ -372,6 +372,22 @@ class _QuizPageState extends State<QuizPage> {
 
   Widget _buildQuizUI() {
     if (_isLoadingTopics) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Loading Topics')),
+        body: Container(
+          color: Color.fromARGB(255, 231, 91, 180), // Set background color
+          child: Center(
+            child: Lottie.asset(
+              'assets/lottie/loading.json',
+              width: 200,
+              height: 200,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_isLoadingQuestions) {
       return Scaffold(
         appBar: AppBar(title: const Text('Loading Topics')),
         body: Container(

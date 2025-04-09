@@ -8,7 +8,6 @@ class BadgeService {
 
   BadgeService(this.userId, this.navigatorKey);
 
-  /// **Check and Award Quiz-Related Badges**
   Future<List<String>> checkAndAwardQuizBadges(
       int score, int totalQuestions, int elapsedTime) async {
     final List<String> earnedBadges = [];
@@ -21,7 +20,6 @@ class BadgeService {
       for (var doc in badgeDocs.docs) doc.id: doc.data()['level'] ?? 0
     };
 
-    // **High Achiever Badge (Single)**
     if (score == totalQuestions) {
       await _checkAndAwardSingleBadge(
         userBadgeRef,
@@ -31,7 +29,6 @@ class BadgeService {
       );
     }
 
-    // **Speed Master Badge (Sequential)**
     await _checkAndAwardSequentialBadge(
       userBadgeRef,
       "Speed Master",
@@ -41,7 +38,6 @@ class BadgeService {
           "Fastest quiz completion in ${elapsedTime ~/ 1000} sec - Level",
     );
 
-    // **Streak Ninja Badge (Milestone-Based)**
     final int streakDays = await _getUserStreak();
     await _checkAndAwardStreakBadge(
       userBadgeRef,
@@ -53,7 +49,6 @@ class BadgeService {
     return earnedBadges;
   }
 
-  /// **Helper Function to Award a Single Badge**
   Future<void> _checkAndAwardSingleBadge(
     CollectionReference userBadgeRef,
     String badgeName,
@@ -71,7 +66,6 @@ class BadgeService {
     }
   }
 
-  /// **Helper Function to Award Speed Master Sequentially**
   Future<void> _checkAndAwardSequentialBadge(
     CollectionReference userBadgeRef,
     String badgeName,
@@ -91,7 +85,6 @@ class BadgeService {
     earnedBadges.add("$badgeName (Level $nextLevel)");
   }
 
-  /// **Helper Function to Award Streak Ninja at Specific Milestones**
   Future<void> _checkAndAwardStreakBadge(
     CollectionReference userBadgeRef,
     Map<String, int> earnedBadgeLevels,
@@ -123,7 +116,6 @@ class BadgeService {
     }
   }
 
-  /// **Check and Award First Subtopic Badge**
   Future<void> checkAndAwardSubtopicBadges(
       String subtopic, String language) async {
     List<String> earnedBadges =
@@ -133,7 +125,6 @@ class BadgeService {
     }
   }
 
-  /// **Helper Function to Check and Award First Subtopic Badge**
   Future<List<String>> _checkAndAwardFirstSubtopicBadge(
       String subtopic, String language) async {
     List<String> earnedBadges = [];
@@ -189,7 +180,6 @@ class BadgeService {
     return earnedBadges;
   }
 
-  /// **Helper Function to Get User Streak**
   Future<int> _getUserStreak() async {
     final userDoc = await _firestore.collection('users').doc(userId).get();
     if (userDoc.exists) {
@@ -199,7 +189,6 @@ class BadgeService {
     return 0;
   }
 
-  /// **Helper Function to Show Badge Earned Dialog**
   void _showBadgeDialog(List<String> earnedBadges) {
     if (earnedBadges.isEmpty) return;
 

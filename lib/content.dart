@@ -165,13 +165,13 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
             "Generate some detailed explanation about ${widget.subtopic} in the context of ${widget.language} programming language . "
             "Make it interesting and catchy, but do not make it overly casual. Imagine you are teaching a 13-year-old. you can sound like a textbook, just a bit more simpler. "
             "Also, include code pieces as examples if needed only. Do not include any formatting like bold or italian. always finish explanation before you give the example."
-            "only put the code piece as example.Do not put any explanation after code piece. no need to use ``` at the start or end of code piece."
+            "only put the code piece as example.Do not put any explanation after a code piece in the response. no need to use ``` at the start or end of code piece."
             "when you first start the explanation, begin with 'pl:', examples with 'eex:'. do not use these headers more than once.")
       ]);
 
       final practiceResponse = await model.generateContent([
         Content.text(
-            "Generate a practice session with 3 diverse questions for the subtopic '${widget.subtopic}' in ${widget.language}. "
+            "Generate a practice session with 3 diverse questions for the subtopic which could be mcq or fill in the blanks '${widget.subtopic}' in ${widget.language}. "
             "The format should be strictly as follows:\n"
             " mcq: What does X mean?\nA. Option1\nB. Option2\nC. Option3\nD. Option4\nAnswer: B\n"
             " fill: A variable that holds multiple values is called a ______.\nAnswer: list\n"
@@ -201,39 +201,43 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
 
   List<Map> _parsePracticeQuestions(String practiceText) {
     final questions = practiceText.split(RegExp(r'\n(?=\d\.)'));
+    print("prrrrrrr");
+    print(practiceText);
+    return questions
+        .where((q) => q.trim().isNotEmpty)
+        .map((q) {
+          if (q.contains("mcq:")) {
+            final parts = q.trim().split('\n');
+            final question = parts[0].replaceFirst("mcq:", '').trim();
+            final options = parts.sublist(1, 5).map((o) => o.trim()).toList();
+            final answer = parts
+                .firstWhere((line) => line.startsWith('Answer:'),
+                    orElse: () => 'Answer:')
+                .split(':')[1]
+                .trim();
 
-    return questions.map((q) {
-      if (q.contains("mcq:")) {
-        final parts = q.split('\n');
-        final question =
-            parts[0].replaceFirst(RegExp(r'\d\.\s*mcq:'), '').trim();
-        final options = parts.sublist(1, 5).map((o) => o.trim()).toList();
-        final answer = parts
-            .firstWhere((line) => line.startsWith('Answer:'))
-            .split(':')[1]
-            .trim();
+            return {
+              'type': 'mcq',
+              'question': question,
+              'options': options,
+              'answer': answer,
+            };
+          } else if (q.contains("fill:")) {
+            final fillParts = q.split('Answer:');
+            final question = fillParts[0].replaceFirst("fill:", '').trim();
+            final answer = fillParts.length > 1 ? fillParts[1].trim() : '';
 
-        return {
-          'type': 'mcq',
-          'question': question,
-          'options': options,
-          'answer': answer,
-        };
-      } else if (q.contains("fill:")) {
-        final fillParts = q.split('Answer:');
-        final question =
-            fillParts[0].replaceFirst(RegExp(r'\d\.\s*fill:'), '').trim();
-        final answer = fillParts[1].trim();
-
-        return {
-          'type': 'fill',
-          'question': question,
-          'answer': answer,
-        };
-      } else {
-        return {};
-      }
-    }).toList();
+            return {
+              'type': 'fill',
+              'question': question,
+              'answer': answer,
+            };
+          } else {
+            return {};
+          }
+        })
+        .where((q) => q.isNotEmpty)
+        .toList();
   }
 
   Map<String, dynamic> _parseGeneratedContent(String response) {

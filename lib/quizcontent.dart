@@ -13,7 +13,7 @@ import 'reviewqstns.dart';
 class ChapterQuiz extends StatefulWidget {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final String topic;
-  final VoidCallback onQuizFinished;
+  final Function(bool) onQuizFinished;
   final String userId;
   final String language;
   ChapterQuiz({
@@ -271,7 +271,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       if (earnedBadges.isNotEmpty) {
         message += "\n🏅 Badge Earned:\n${earnedBadges.join('\n')}";
       }
-      widget.onQuizFinished();
+      widget.onQuizFinished(passed);
 
       // Add actions
       actions.add(TextButton(
@@ -300,7 +300,7 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     }
 
     // Show Dialog
-    showDialog(
+    await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
@@ -475,7 +475,8 @@ class _ChapterQuizState extends State<ChapterQuiz> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Loading Topics')),
+        appBar: AppBar(title: const Text('QUIZ')),
+        backgroundColor: Color.fromARGB(255, 231, 91, 180),
         body: Container(
           color: Color.fromARGB(255, 231, 91, 180),
           child: Center(
