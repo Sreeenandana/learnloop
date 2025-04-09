@@ -1,23 +1,23 @@
-//content il ippo i have added example,mcq and fill in the blanks. but user cant select answers yet.
-//also we need to add a check button for each excercise and display msg of result. only if everything is correct, they
-//should be able to move forward.
-//Badges not working, but streaks are
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:learnloop/services/badges.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'dart:async';
+import 'package:lottie/lottie.dart';
+import 'package:workmanager/workmanager.dart';
 
 class SubtopicContentPage extends StatefulWidget {
   final String topic;
   final String subtopic;
   final VoidCallback onSubtopicFinished;
   final String userId;
+  final String language;
 
   SubtopicContentPage({
     super.key,
     required this.topic,
     required this.subtopic,
     required this.onSubtopicFinished,
+    required this.language,
     required this.userId,
   });
 
@@ -26,16 +26,127 @@ class SubtopicContentPage extends StatefulWidget {
 }
 
 class _SubtopicContentPageState extends State<SubtopicContentPage> {
-  final BadgeService _badgeService = BadgeService();
+  // final BadgeService _badgeService = BadgeService();
   final String _apiKey = 'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44';
   Map<String, dynamic>? subtopicData;
+  List<Map<String, dynamic>>? practiceData;
   bool isLoading = true;
   String? errorMessage;
+  Timer? _inactivityTimer;
 
   @override
   void initState() {
     super.initState();
     _fetchSubtopicContent();
+  }
+
+  @override
+  void dispose() {
+    _inactivityTimer?.cancel();
+    super.dispose();
+  }
+
+  Widget _buildMCQ(Map<String, dynamic> q) {
+    String? selected;
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return Card(
+          margin: EdgeInsets.symmetric(vertical: 10),
+          child: Padding(
+            padding: EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(q['question'], style: TextStyle(fontSize: 16)),
+                SizedBox(height: 8),
+                ...q['options'].map<Widget>((opt) {
+                  return RadioListTile<String>(
+                    title: Text(opt),
+                    value: opt[0], // Use A, B, C, D as value
+                    groupValue: selected,
+                    onChanged: (val) {
+                      setState(() => selected = val);
+                    },
+                  );
+                }).toList(),
+                if (selected != null)
+                  Text(
+                    selected == q['answer']
+                        ? 'Correct!'
+                        : 'Wrong! Answer: ${q['answer']}',
+                    style: TextStyle(
+                      color:
+                          selected == q['answer'] ? Colors.green : Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMatch(Map<String, dynamic> q) {
+    return Card(
+      margin: EdgeInsets.symmetric(vertical: 10),
+      child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Match the following:', style: TextStyle(fontSize: 16)),
+            SizedBox(height: 6),
+            Text(q['pairs'], style: TextStyle(fontFamily: 'monospace')),
+            SizedBox(height: 6),
+            Text('Answer: ${q['answer']}',
+                style: TextStyle(color: Colors.grey[700]))
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFill(Map<String, dynamic> q) {
+    final controller = TextEditingController();
+    bool submitted = false;
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return Card(
+          margin: EdgeInsets.symmetric(vertical: 10),
+          child: Padding(
+            padding: EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(q['question'], style: TextStyle(fontSize: 16)),
+                TextField(controller: controller),
+                SizedBox(height: 6),
+                ElevatedButton(
+                  onPressed: () => setState(() => submitted = true),
+                  child: Text('Check'),
+                ),
+                if (submitted)
+                  Text(
+                    controller.text.trim().toLowerCase() ==
+                            q['answer'].toString().toLowerCase()
+                        ? 'Correct!'
+                        : 'Wrong! Answer: ${q['answer']}',
+                    style: TextStyle(
+                      color: controller.text.trim().toLowerCase() ==
+                              q['answer'].toString().toLowerCase()
+                          ? Colors.green
+                          : Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _fetchSubtopicContent() async {
@@ -45,35 +156,36 @@ class _SubtopicContentPageState extends State<SubtopicContentPage> {
         apiKey: _apiKey,
       );
 
-      final prompt = """
-Generate structured and interactive content for the subtopic: "${widget.subtopic}" in Java.it should be fun and interesting tone.
+      if (widget.subtopic.trim().isEmpty) {
+        throw Exception('Subtopic is null or empty');
+      }
 
-**Content Format:**  
-1. **Explanation:** Provide a clear explanation of the concept.  
-2. **Example:** Include a code example.   
-3. **Questions:** Include multiple-choice questions and code snippet fill-in-the-blanks.
+      final response = await model.generateContent([
+        Content.text(
+            "Generate some detailed explanation about ${widget.subtopic} in the context of ${widget.language} programming language . "
+            "Make it interesting and catchy, but do not make it overly casual. Imagine you are teaching a 13-year-old. you can sound like a textbook, just a bit more simpler. "
+            "Also, include code pieces as examples if needed only. Do not include any formatting like bold or italian. always finish explanation before you give the example."
+            "only put the code piece as example.Do not put any explanation after code piece. no need to use ``` at the start or end of code piece."
+            "when you first start the explanation, begin with 'pl:', examples with 'eex:'. do not use these headers more than once.")
+      ]);
 
-**MCQ Format:**  
-- Start the question with `qstn:`  
-- Provide answer choices prefixed with `opt:` (comma-separated)  
-- Indicate the correct answer using `ans:`    
- 
+      final practiceResponse = await model.generateContent([
+        Content.text(
+            "Generate a practice session with 3 diverse questions for the subtopic '${widget.subtopic}' in ${widget.language}. "
+            "The format should be strictly as follows:\n"
+            " mcq: What does X mean?\nA. Option1\nB. Option2\nC. Option3\nD. Option4\nAnswer: B\n"
+            " fill: A variable that holds multiple values is called a ______.\nAnswer: list\n"
+            "Do not include any explanation. Do not include any labels or headers.")
+      ]);
 
-**Fill-in-the-Blanks Format:**  
-- Start the question with `fqstn:`  
-- Represent the missing part with `blank`  
-- Provide the correct answer using `fans:`  
-
-
-Now, generate content using this format.
-""";
-
-      final response = await model.generateContent([Content.text(prompt)]);
-
+      // print(response.text);
       if (response.text != null && response.text!.trim().isNotEmpty) {
-        print(response.text);
         setState(() {
           subtopicData = _parseGeneratedContent(response.text!);
+          practiceData = _parsePracticeQuestions(practiceResponse.text!)
+              .cast<Map<String, dynamic>>();
+          print("subbbb");
+          print(subtopicData);
           isLoading = false;
         });
       } else {
@@ -87,239 +199,200 @@ Now, generate content using this format.
     }
   }
 
-  Map<String, dynamic> _parseGeneratedContent(String response) {
-    Map<String, dynamic> parsedContent = {
-      'explanation': '',
-      'example': '',
-      'questions': [],
-    };
+  List<Map> _parsePracticeQuestions(String practiceText) {
+    final questions = practiceText.split(RegExp(r'\n(?=\d\.)'));
 
-    // Extract explanation
-    RegExp expExplanation =
-        RegExp(r'\*\*1\. Explanation:\*\*\n\n(.*?)\n\n', dotAll: true);
-    parsedContent['explanation'] =
-        expExplanation.firstMatch(response)?.group(1)?.trim() ?? '';
+    return questions.map((q) {
+      if (q.contains("mcq:")) {
+        final parts = q.split('\n');
+        final question =
+            parts[0].replaceFirst(RegExp(r'\d\.\s*mcq:'), '').trim();
+        final options = parts.sublist(1, 5).map((o) => o.trim()).toList();
+        final answer = parts
+            .firstWhere((line) => line.startsWith('Answer:'))
+            .split(':')[1]
+            .trim();
 
-    // Extract example code
-    RegExp expExample =
-        RegExp(r'\*\*2\. Example:\*\*\n\n```java\n(.*?)\n```', dotAll: true);
-    parsedContent['example'] =
-        expExample.firstMatch(response)?.group(1)?.trim() ?? '';
+        return {
+          'type': 'mcq',
+          'question': question,
+          'options': options,
+          'answer': answer,
+        };
+      } else if (q.contains("fill:")) {
+        final fillParts = q.split('Answer:');
+        final question =
+            fillParts[0].replaceFirst(RegExp(r'\d\.\s*fill:'), '').trim();
+        final answer = fillParts[1].trim();
 
-    // Extract MCQ questions
-    RegExp expMCQ = RegExp(
-        r'`qstn:`\s*(.*?)\n`opt:`\s*(.*?)\n`ans:`\s*(.*?)\n`sub:`\s*(.*?)\n',
-        dotAll: true);
-    var mcqMatches = expMCQ.allMatches(response);
-    for (var match in mcqMatches) {
-      parsedContent['questions'].add({
-        'type': 'mcq',
-        'question': match.group(1)?.trim() ?? '',
-        'options': match.group(2)?.trim().split(', '),
-        'answer': match.group(3)?.trim() ?? '',
-      });
-    }
-
-    // Extract Fill-in-the-Blanks questions
-    RegExp expFillBlanks = RegExp(
-        r'`fqstn:`\s*(.*?)\n`fans:`\s*(.*?)\n`sub:`\s*(.*?)\n',
-        dotAll: true);
-    var fillMatches = expFillBlanks.allMatches(response);
-    for (var match in fillMatches) {
-      parsedContent['questions'].add({
-        'type': 'fill-in-the-blank',
-        'question': match.group(1)?.trim() ?? '',
-        'answer': match.group(2)?.trim() ?? '',
-      });
-    }
-
-    return parsedContent;
+        return {
+          'type': 'fill',
+          'question': question,
+          'answer': answer,
+        };
+      } else {
+        return {};
+      }
+    }).toList();
   }
 
-  Future<void> _markSubtopicAsFinished() async {
-    try {
-      final userRef =
-          FirebaseFirestore.instance.collection('users').doc(widget.userId);
-      final learningPathRef = userRef.collection('learningPath');
-      final docRef = learningPathRef.doc(widget.topic);
+  Map<String, dynamic> _parseGeneratedContent(String response) {
+    String explanation = '';
+    String example = '';
+    List<String> questions = [];
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final docSnapshot = await transaction.get(docRef);
-        if (docSnapshot.exists) {
-          List<dynamic> subtopicsDynamic =
-              docSnapshot.data()?['subtopics'] ?? [];
-          List<Map<String, dynamic>> subtopics = subtopicsDynamic
-              .map((s) => Map<String, dynamic>.from(s))
-              .toList();
+    final expMatch =
+        RegExp(r'pl:(.*?)(eex:|$)', dotAll: true).firstMatch(response);
+    final exMatch =
+        RegExp(r'eex:(.*?)(qquestions:|$)', dotAll: true).firstMatch(response);
+    final qMatch =
+        RegExp(r'qquestions:(.*)', dotAll: true).firstMatch(response);
 
-          for (var sub in subtopics) {
-            if (sub['name'] == widget.subtopic) {
-              sub['status'] = 'completed';
-              sub['finishedAt'] = DateTime.now().toIso8601String();
-            }
-          }
-          transaction.update(docRef, {'subtopics': subtopics});
-        }
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Subtopic completed!")),
-      );
-      widget.onSubtopicFinished();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+    if (expMatch != null) {
+      explanation = expMatch.group(1)!.trim();
+      print("plplpl");
+      print(explanation);
     }
+    if (exMatch != null) {
+      example = exMatch.group(1)!.trim();
+      print("xxxxxxx");
+      print(example);
+    }
+    if (qMatch != null) {
+      questions = qMatch
+          .group(1)!
+          .trim()
+          .split('\n')
+          .where((q) => q.trim().isNotEmpty)
+          .toList();
+    }
+
+    return {
+      'explanation': explanation,
+      'example': example,
+      'questions': questions,
+    };
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.subtopic)),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : errorMessage != null
-              ? Center(
-                  child: Text(
-                    errorMessage!,
-                    style: const TextStyle(color: Colors.red, fontSize: 16),
-                  ),
-                )
-              : Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // **Explanation**
-                        Text(
-                          "Explanation:",
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 18),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(subtopicData!['explanation'],
-                            style: const TextStyle(fontSize: 16)),
-                        const SizedBox(height: 20),
-
-                        // **Example Code**
-                        Text(
-                          "Example:",
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 18),
-                        ),
-                        const SizedBox(height: 5),
-                        Container(
-                          padding: EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            subtopicData!['example'],
-                            style: TextStyle(fontFamily: 'monospace'),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // **MCQs Section**
-                        if (subtopicData!['questions']
-                            .where((q) => q['type'] == 'mcq')
-                            .isNotEmpty)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Multiple Choice Questions:",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 18),
-                              ),
-                              const SizedBox(height: 10),
-                              ...subtopicData!['questions']
-                                  .where((q) => q['type'] == 'mcq')
-                                  .map<Widget>((q) => _buildMCQ(q)),
-                            ],
-                          ),
-                        const SizedBox(height: 20),
-
-                        // **Fill-in-the-Blanks Section**
-                        if (subtopicData!['questions']
-                            .where((q) => q['type'] == 'fill-in-the-blank')
-                            .isNotEmpty)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Fill in the Blanks:",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 18),
-                              ),
-                              const SizedBox(height: 10),
-                              ...subtopicData!['questions']
-                                  .where(
-                                      (q) => q['type'] == 'fill-in-the-blank')
-                                  .map<Widget>((q) => _buildFillInTheBlank(q)),
-                            ],
-                          ),
-                        const SizedBox(height: 20),
-
-                        // **Mark as Finished Button**
-                        ElevatedButton(
-                          onPressed: _markSubtopicAsFinished,
-                          child: const Text('Mark as Finished'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-    );
-  }
-
-// MCQ Widget
-  Widget _buildMCQ(Map<String, dynamic> mcq) {
-    String? selectedOption;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(mcq['question'], style: TextStyle(fontSize: 16)),
-        ...mcq['options'].map<Widget>((option) {
-          return RadioListTile<String>(
-            title: Text(option),
-            value: option,
-            groupValue: selectedOption,
-            onChanged: (value) {
-              setState(() {
-                selectedOption = value;
-              });
-            },
-          );
-        }).toList(),
-        const SizedBox(height: 10),
-      ],
-    );
-  }
-
-// Fill-in-the-Blank Widget
-  Widget _buildFillInTheBlank(Map<String, dynamic> fitb) {
-    TextEditingController _controller = TextEditingController();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(fitb['question'].replaceAll("blank", "____"),
-            style: TextStyle(fontSize: 16)),
-        const SizedBox(height: 5),
-        TextField(
-          controller: _controller,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(),
-            hintText: "Your answer here...",
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            widget.subtopic.trim(),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
         ),
-        const SizedBox(height: 10),
-      ],
+        backgroundColor: Color(0xFFdda0dd),
+        elevation: 2,
+        iconTheme: IconThemeData(color: Colors.white),
+      ),
+      body: isLoading
+          ? Container(
+              color: Color.fromARGB(
+                  255, 231, 91, 180), // Set any background color here
+              child: Center(
+                child: Lottie.asset(
+                  'assets/lottie/loading.json',
+                  width: 200,
+                  height: 200,
+                ),
+              ),
+            )
+          : Padding(
+              padding: EdgeInsets.all(16.0),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Card(
+                      elevation: 3,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      color: Colors.white,
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(height: 10),
+                            Text(
+                              subtopicData!['explanation'],
+                              style: TextStyle(
+                                  fontSize: 16, color: Colors.black87),
+                            ),
+                            SizedBox(height: 10),
+                            Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                subtopicData!['example'],
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.black87,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    if (practiceData != null && practiceData!.isNotEmpty) ...[
+                      Text(
+                        'Practice Session',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 10),
+                      ...practiceData!.map<Widget>((q) {
+                        switch (q['type']) {
+                          case 'mcq':
+                            return _buildMCQ(q);
+                          case 'fill':
+                            return _buildFill(q);
+                          default:
+                            return SizedBox();
+                        }
+                      }).toList(),
+                    ],
+                    SizedBox(height: 30),
+                    ElevatedButton(
+                      onPressed: () {
+                        widget.onSubtopicFinished();
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Mark as Finished',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 }

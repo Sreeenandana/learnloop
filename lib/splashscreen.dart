@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'home.dart'; // Import your HomePage
 import 'login.dart'; // Import your LoginPage
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -29,7 +27,7 @@ class _SplashScreenState extends State<SplashScreen> {
       // Navigate to HomePage if the user is logged in
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const HomePage()),
+        MaterialPageRoute(builder: (context) => HomePage()),
       );
     } else {
       // Navigate to LoginPage if the user is not logged in
@@ -62,8 +60,8 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
             const SizedBox(height: 16), // Add spacing
             Image.asset(
-            "assets/images/learnloop.png", // Path to your PNG file
-            width: 150,
+              "assets/images/learnloop.png", // Path to your PNG file
+              width: 150,
             ),
           ],
         ),

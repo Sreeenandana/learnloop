@@ -3,22 +3,25 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'weekly_leaderboard.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-//import 'path.dart';
-import 'reviewpath.dart';
 import 'dart:async';
 import 'pathgen.dart';
-import 'pathdisplay.dart';
+import 'package:lottie/lottie.dart';
+import 'services/badge service.dart';
+import 'main.dart';
+import 'reviewqstns.dart';
 
 class ChapterQuiz extends StatefulWidget {
+  final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final String topic;
   final VoidCallback onQuizFinished;
   final String userId;
-
-  const ChapterQuiz({
+  final String language;
+  ChapterQuiz({
     super.key,
     required this.topic,
     required this.onQuizFinished,
     required this.userId,
+    required this.language,
   });
 
   @override
@@ -33,11 +36,12 @@ class _ChapterQuizState extends State<ChapterQuiz> {
   String? _feedbackMessage;
   bool _isAnswerCorrect = false;
   bool _hasAnswered = false;
+  List<dynamic> _incorrectQuestions = [];
   late Stopwatch _stopwatch;
   late Timer _timer;
 
   final String _apiKey = 'AIzaSyAAAA0G38_VkZkYlBRam1M-F8Pmk88hY44';
-
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   @override
   void initState() {
     super.initState();
@@ -59,7 +63,8 @@ class _ChapterQuizState extends State<ChapterQuiz> {
       );
 
       // Await the prompt since it's a Future<String>
-      final String prompt = await _generatePromptForQuiz(widget.topic);
+      final String prompt = await _generatePromptForQuiz(
+          widget.topic, widget.userId, widget.language);
       final content = [Content.text(prompt)];
 
       final response = await model.generateContent(content);
@@ -87,41 +92,60 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     }
   }
 
-  Future<String> _generatePromptForQuiz(String topic) async {
-    List<String> subtopics = await _fetchSubtopicsFromFirestore(topic);
+  Future<String> _generatePromptForQuiz(
+      String topic, String userId, String language) async {
+    List<String> subtopics =
+        await _fetchSubtopicsFromFirestore(topic, language);
     String subtopicsString = subtopics.join(', ');
 
-    return "Generate 5 multiple choice questions (MCQs) about Java, on topic $topic. "
+    return "Generate 20 multiple choice questions (MCQs) about $language, on topic $topic. "
         "Focus on the following subtopics: $subtopicsString. "
-        "For each question, start with 'qstn:' for the question, 'opt:' for the options (separate them with commas), "
-        "'ans:' for the correct answer, and 'sub:' for the subtopic. "
-        "Separate each question set with a newline. Give only 4 options. "
-        "Do not provide any other message or use any special characters unless necessary.";
+        "Each question must be structured as follows:"
+        "qstn: [Question text]\n"
+        "opt: [Option1]|[Option2]|[Option3]|[Option4]\n"
+        "ans: [Correct Option (exact match from opt)]\n"
+        "sub: [Subtopic]\n\n"
+        "Ensure that:\n"
+        "- Options are pipe | separated. do not change the format. \n"
+        "- The correct answer appears exactly as listed in 'opt'.\n"
+        "- No additional text is provided.";
   }
 
-  Future<List<String>> _fetchSubtopicsFromFirestore(String topic) async {
+  Future<List<String>> _fetchSubtopicsFromFirestore(
+      String topic, String language) async {
     List<String> subtopics = [];
+    String? userId = _auth.currentUser?.uid;
     try {
-      CollectionReference topicsCollection =
-          FirebaseFirestore.instance.collection('topics');
-      DocumentSnapshot topicDoc = await topicsCollection.doc(topic).get();
+      CollectionReference userCollection =
+          FirebaseFirestore.instance.collection('users');
+      DocumentSnapshot<Map<String, dynamic>> topicDoc = await userCollection
+          .doc(userId)
+          .collection("languages")
+          .doc(language)
+          .collection('learningPath') // Correctly referencing the collection
+          .doc(topic)
+          .get();
 
       if (topicDoc.exists && topicDoc.data() != null) {
-        var data = topicDoc.data() as Map<String, dynamic>;
-        if (data.containsKey('subtopics')) {
-          subtopics = List<String>.from(data['subtopics']);
+        Map<String, dynamic> data = topicDoc.data()!;
+        if (data.containsKey('subtopics') && data['subtopics'] is List) {
+          subtopics = (data['subtopics'] as List)
+              .map((subtopic) => subtopic['name'] as String)
+              .toList();
         }
       }
     } catch (e) {
       print("Error fetching subtopics: $e");
     }
+
+    //   print("subtopics in quiz $subtopics");
     return subtopics;
   }
 
   List<dynamic> _parseQuestions(String responseText) {
     final List<dynamic> parsedQuestions = [];
     final lines = responseText.split('\n');
-    Map<String, String> currentQuestion = {};
+    Map<String, dynamic> currentQuestion = {};
 
     for (var line in lines) {
       line = line.trim();
@@ -132,7 +156,12 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         }
         currentQuestion['qstn'] = line.substring(5).trim();
       } else if (line.startsWith('opt:')) {
-        currentQuestion['opt'] = line.substring(4).trim();
+        var options = line.substring(4).trim().split('|');
+        options = options.map((opt) => opt.trim()).toList();
+        if (options.length != 4) {
+          print("⚠️ Warning: Incorrect options format - $options");
+        }
+        currentQuestion['opt'] = options;
       } else if (line.startsWith('ans:')) {
         currentQuestion['ans'] = line.substring(4).trim();
       } else if (line.startsWith('sub:')) {
@@ -147,11 +176,10 @@ class _ChapterQuizState extends State<ChapterQuiz> {
     return parsedQuestions;
   }
 
-  Map<String, dynamic> _buildQuestionMap(Map<String, String> question) {
+  Map<String, dynamic> _buildQuestionMap(Map<String, dynamic> question) {
     return {
       'question': question['qstn'] ?? '',
-      'options':
-          (question['opt'] ?? '').split(',').map((opt) => opt.trim()).toList(),
+      'options': question.containsKey('opt') ? question['opt'] : [],
       'correct_answer': question['ans'] ?? '',
       'subtopic': question['sub'] ?? '',
     };
@@ -168,8 +196,13 @@ class _ChapterQuizState extends State<ChapterQuiz> {
           ? 'Correct!'
           : 'Incorrect. The correct answer is "$correctAnswer".';
 
+      // ✅ Store the selected answer as 'user_answer'
+      question['user_answer'] = selectedAnswer;
+
       if (_isAnswerCorrect) {
         _score++;
+      } else {
+        _incorrectQuestions.add(question);
       }
     });
   }
@@ -181,213 +214,278 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         _hasAnswered = false;
         _feedbackMessage = null;
       });
+      // Show retry screen before re-asking
     } else {
       _finishQuiz();
     }
   }
-
-  void _showReviewDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text('Review Required'),
-        content: Text(
-          'Sorry! Your score is below 80%.\n\n'
-          'Your Score: $_score / ${_questions.length} '
-          '(${(_score / _questions.length * 100).toStringAsFixed(1)}%)\n\n'
-          'Please review the chapter and try again.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              // Navigator.pop(context); // Close the dialog
-              Navigator.pop(context); // Go back to the previous screen
-            },
-            child: Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
+//FINISHING THE QUIZ
 
   Future<void> _finishQuiz() async {
     _stopwatch.stop();
     _timer.cancel();
 
-    double scorePercentage = (_score / _questions.length) * 100;
+    String message;
+    List<Widget> actions = [];
+    bool streakModified = false;
+    bool passed = (_score / _questions.length) * 100 >= 80;
+    bool hasIncorrectAnswers = _incorrectQuestions.isNotEmpty;
+
+// SCORE CALCULATION
+    if (!passed) {
+      message = 'Sorry! Your score is below 80%.\n\n'
+          'Your Score: $_score / ${_questions.length} '
+          '(${(_score / _questions.length * 100).toStringAsFixed(1)}%)\n\n'
+          'Please review the chapter and try again.';
+
+      actions.add(TextButton(
+        onPressed: () {
+          Navigator.pop(context);
+          Navigator.pop(context);
+        },
+        child: Text('OK'),
+      ));
+      actions.add(ElevatedButton(
+        onPressed: () {
+          Navigator.pop(context);
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  ReviewScreen(incorrectQuestions: _incorrectQuestions),
+            ),
+          );
+        },
+        child: Text('Review'),
+      ));
+    } else {
+      message = 'Congratulations! You passed!\n'
+          'Your Score: $_score / ${_questions.length} '
+          '(${(_score / _questions.length * 100).toStringAsFixed(1)}%)';
+      //final badgeService = BadgeService(widget.userId,navigatorKey);
+      List<String> earnedBadges =
+          await BadgeService(widget.userId, navigatorKey)
+              .checkAndAwardQuizBadges(
+                  _score, _questions.length, _stopwatch.elapsedMilliseconds);
+
+      if (earnedBadges.isNotEmpty) {
+        message += "\n🏅 Badge Earned:\n${earnedBadges.join('\n')}";
+      }
+      widget.onQuizFinished();
+
+      // Add actions
+      actions.add(TextButton(
+        onPressed: () {
+          Navigator.pop(context);
+          Navigator.pop(context);
+        },
+        child: Text('OK'),
+      ));
+
+      if (hasIncorrectAnswers) {
+        actions.add(ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    ReviewScreen(incorrectQuestions: _incorrectQuestions),
+              ),
+            );
+          },
+          child: Text('Review'),
+        ));
+      }
+    }
+
+    // Show Dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Quiz Completed'),
+        content: Text(message),
+        actions: actions,
+      ),
+    );
+
+// FIRESTORE UPDATES AND STREAK LOGIC
+    await _updateFirestore(passed);
+    streakModified = await _updateDailyStreak(
+        FirebaseFirestore.instance.collection('users').doc(widget.userId));
+
+    if (streakModified) {
+      print("🔥 Streak Updated!");
+    }
+  }
+
+// FIRESTORE UPDATES
+  Future<void> _updateFirestore(bool passed) async {
     final firestore = FirebaseFirestore.instance;
     final userRef = firestore.collection('users').doc(widget.userId);
-
+    final quizRef = userRef
+        .collection('languages')
+        .doc(widget.language)
+        .collection('chapterQuiz')
+        .doc(widget.topic);
+    Map<String, dynamic> subtopicScores = {};
     List<String> weakSubtopics = [];
 
-    // Store subtopic-wise scores
-    Map<String, dynamic> subtopicScores = {};
+    // Fetch current quiz status (to check if it's a first attempt)
+    final quizSnapshot = await quizRef.get();
+    bool isFirstAttempt =
+        !quizSnapshot.exists || quizSnapshot.data()?['status'] == 'pending';
+
+    // Calculate subtopic scores
     for (var question in _questions) {
-      String subtopic =
-          question['subtopic']; // Assuming subtopic is now in questions
-      bool isCorrect = question['user_answer'] == question['correct_answer'];
+      String subtopic = question['subtopic'];
+      bool isCorrect = (question['user_answer'] == question['correct_answer']);
 
       if (!subtopicScores.containsKey(subtopic)) {
         subtopicScores[subtopic] = {'correct': 0, 'total': 0};
       }
-
       subtopicScores[subtopic]['total'] += 1;
       if (isCorrect) {
         subtopicScores[subtopic]['correct'] += 1;
       }
     }
 
-    // Calculate subtopic-wise percentages and identify weak subtopics
+    // Compute final subtopic scores and identify weak subtopics
     Map<String, dynamic> finalSubtopicScores = {};
     subtopicScores.forEach((subtopic, scores) {
-      double subtopicScorePercentage =
-          (scores['correct'] / scores['total']) * 100;
+      double subtopicScorePercentage = (scores['total'] > 0)
+          ? (scores['correct'] / scores['total']) * 100
+          : 0;
       finalSubtopicScores[subtopic] = subtopicScorePercentage;
-
       if (subtopicScorePercentage < 80) {
         weakSubtopics.add(subtopic);
       }
     });
 
     try {
-      await userRef.collection('chapterQuiz').doc(widget.topic).set({
+      print("updating quiz");
+      // Update quiz record
+      await quizRef.set({
         'topic': widget.topic,
         'score': _score,
         'totalQuestions': _questions.length,
         'totalTimeTakenMs': _stopwatch.elapsedMilliseconds,
         'modificationTime': DateTime.now().toIso8601String(),
         'status': 'completed',
-        'subtopicScores': finalSubtopicScores, // Store subtopic-wise scores
+        'attempts': FieldValue.increment(1),
+        'subtopicScores': finalSubtopicScores,
       }, SetOptions(merge: true));
 
-      // Update total score
-      final chapterQuizSnapshot = await userRef.collection('chapterQuiz').get();
-      int totalScore = 0;
-      for (var doc in chapterQuizSnapshot.docs) {
-        final data = doc.data();
-        final dynamic score = data['score'];
-        if (score is num) {
-          totalScore += score.toInt();
-        }
-      }
-
-      await userRef.set({
-        'totalPoints': totalScore,
-      }, SetOptions(merge: true));
-      await _updateDailyStreak(userRef);
-
-      if (scorePercentage < 80) {
-        // Strictly below 80% → Review required
-        _showReviewDialog();
-        weakSubtopics = weakSubtopics.toSet().toList(); // Remove duplicates
-        await userRef.collection('learningPath').doc(widget.topic).update({
+      if (!passed) {
+        // User failed, update learning path
+        await userRef
+            .collection('languages')
+            .doc(widget.language)
+            .collection('learningPath')
+            .doc(widget.topic)
+            .update({
           'completed': false,
-          //   'needsReview': true,
-          'generateSimplerSubtopics': true,
-          'weakSubtopics': weakSubtopics, // Store weak subtopics for review
+          'weakSubtopics': weakSubtopics.toSet().toList(),
         });
 
-        setState(() {
-          _isLoading = true;
+        final generator = LearningPathGenerator();
+        await generator.generateOrModifyLearningPath(
+          language: widget.language,
+          topic: widget.topic,
+          weakSubtopics: weakSubtopics,
+        );
+      } else {
+        // User passed, update leaderboard
+        await updateLeaderboard(widget.userId, widget.topic, _score);
+
+        // Update learning path
+        await userRef
+            .collection('languages')
+            .doc(widget.language)
+            .collection('learningPath')
+            .doc(widget.topic)
+            .update({
+          'completed': true,
+          'weakSubtopics': [],
         });
-        if (widget.topic != null &&
-            widget.topic!.isNotEmpty &&
-            weakSubtopics.isNotEmpty) {
-          print("going to mod ${widget.topic} and ${weakSubtopics}");
 
-          // Navigate only when values exist
-          /*await LearningPathPage(
-              topic: widget.topic, weakSubtopics: weakSubtopics);*/
-          setState(() {
-            _isLoading = true;
+        // **If first attempt and passed, add score to total points**
+        if (isFirstAttempt) {
+          await userRef.update({
+            'totalPoints': FieldValue.increment(_score),
           });
-
-// Wait a bit to let UI update
-          await Future.delayed(Duration(milliseconds: 100));
-
-          print("Navigating to LearningPathPage");
-
-          final generator = LearningPathGenerator();
-          await generator.generateOrModifyLearningPath(
-            topic: widget.topic, // Ensure topic is not null
-            weakSubtopics: weakSubtopics,
-          ); // Ensure path is generated before navigating
-
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => LearningPathDisplay(),
-            ),
-          );
-
-          setState(() {
-            _isLoading = false;
-          });
-
-          //Navigator.pop(context); // Close the dialog
-          // Navigator.pop(context);
-        } else {
-          print("Skipping navigation: topic or weakSubtopics are missing");
         }
-
-        return; // Stop execution to prevent marking as completed
       }
-
-      await updateLeaderboard(widget.userId, widget.topic, _score);
-      await userRef.collection('learningPath').doc(widget.topic).update({
-        'completed': true,
-        'needsReview': false,
-        'generateSimplerSubtopics': false,
-        'weakSubtopics': [], // Reset weak subtopics after passing
-      });
     } catch (e) {
       print("Error updating Firestore: $e");
     }
   }
 
-  Future<void> _updateDailyStreak(DocumentReference userRef) async {
-    final today = DateTime.now();
-    final todayDate = DateTime(today.year, today.month, today.day);
+// ROLLING STREAK LOGIC
+  Future<bool> _updateDailyStreak(DocumentReference userRef) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day); // Store only date
+    bool streakUpdated = false;
 
     try {
       final userDoc = await userRef.get();
       final data = userDoc.data() as Map<String, dynamic>?;
 
-      if (data != null && data.containsKey('lastActiveDate')) {
-        final lastActive = DateTime.parse(data['lastActiveDate']);
-        final lastDate =
+      if (data != null && data.containsKey('lastActiveTimestamp')) {
+        final lastActive = DateTime.parse(data['lastActiveTimestamp']);
+        final lastActiveDate =
             DateTime(lastActive.year, lastActive.month, lastActive.day);
-
         int streak = data['streak'] ?? 0;
+        int daysDifference = today.difference(lastActiveDate).inDays;
 
-        if (todayDate.difference(lastDate).inDays == 1) {
+        if (daysDifference == 0) {
+          print("✅ User already active today. Streak remains: $streak");
+          return false; // No update needed
+        } else if (daysDifference == 1) {
+          print("🔥 Streak continued! Increasing streak.");
           streak += 1;
-        } else if (todayDate.difference(lastDate).inDays > 1) {
+          streakUpdated = true;
+        } else {
+          print("❌ Streak reset. More than 1 day gap.");
           streak = 1;
+          streakUpdated = true;
         }
 
         await userRef.set({
           'streak': streak,
-          'lastActiveDate': todayDate.toIso8601String(),
+          'lastActiveTimestamp': today.toIso8601String(), // Store only the date
         }, SetOptions(merge: true));
       } else {
+        print("🎉 First-time activity, starting new streak.");
         await userRef.set({
           'streak': 1,
-          'lastActiveDate': todayDate.toIso8601String(),
+          'lastActiveTimestamp': today.toIso8601String(),
         }, SetOptions(merge: true));
+        streakUpdated = true;
       }
     } catch (e) {
-      print("Error updating streak: $e");
+      print("❌ Error updating streak: $e");
     }
+
+    return streakUpdated;
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Quiz')),
-        body: const Center(child: CircularProgressIndicator()),
+        appBar: AppBar(title: const Text('Loading Topics')),
+        body: Container(
+          color: Color.fromARGB(255, 231, 91, 180),
+          child: Center(
+            child: Lottie.asset(
+              'assets/lottie/loading.json',
+              width: 200,
+              height: 200,
+            ),
+          ),
+        ),
       );
     }
 
@@ -400,23 +498,23 @@ class _ChapterQuizState extends State<ChapterQuiz> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            /*           Text(
+            Text(
               'Total Time: ${(_stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)} seconds',
               style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Colors.blue),
-            ),*/
+            ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
+                /* Text(
                   'Time: ${(_stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)}s',
                   style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: Colors.blue),
-                ),
+                ),*/
                 Text(
                   'Score: $_score / ${_questions.length}',
                   style: TextStyle(

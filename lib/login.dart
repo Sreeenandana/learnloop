@@ -1,9 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+//import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/material.dart';
 import 'home.dart';
-import 'initial.dart'; 
+import 'langsel.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -16,7 +16,7 @@ class LoginPageState extends State<LoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignInService = GoogleSignIn();
+  // final GoogleSignIn _googleSignInService = GoogleSignIn();
 
   String _errorMessage = '';
 
@@ -40,7 +40,7 @@ class LoginPageState extends State<LoginPage> {
       if (userCredential.user != null && mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomePage()),
+          MaterialPageRoute(builder: (context) => HomePage()),
         );
       }
     } catch (e) {
@@ -48,7 +48,7 @@ class LoginPageState extends State<LoginPage> {
     }
   }
 
-  Future<void> _googleSignIn() async {
+  /* Future<void> _googleSignIn() async {
     setState(() => _errorMessage = '');
 
     try {
@@ -69,13 +69,13 @@ class LoginPageState extends State<LoginPage> {
       if (userCredential.user != null && mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomePage()),
+          MaterialPageRoute(builder: (context) => HomePage()),
         );
       }
     } catch (e) {
       setState(() => _errorMessage = _handleAuthError(e));
     }
-  }
+  }*/
 
   String _handleAuthError(dynamic error) {
     if (error is FirebaseAuthException) {
@@ -152,11 +152,11 @@ class LoginPageState extends State<LoginPage> {
                 child: const Text('Login',
                     style: TextStyle(fontSize: 18, color: Colors.white)),
               ),
-              const SizedBox(height: 16),
+              /* const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _googleSignIn,
                 child: const Text('Sign in with Google'),
-              ),
+              ),*/
               const SizedBox(height: 12),
               if (_errorMessage.isNotEmpty)
                 Text(
@@ -260,7 +260,7 @@ class SignUpPageState extends State<SignUpPage> {
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) =>  QuizPage()),
+            MaterialPageRoute(builder: (context) => LanguageSelectionPage()),
           );
         }
       }
